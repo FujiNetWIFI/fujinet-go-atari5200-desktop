@@ -32,7 +32,12 @@ def probe_bytes(data):
     max_run = PROBE // 2      # no single byte value may cover half the slice
     min_distinct = 12
 
-    for start in range(0, max(1, len(data) - PROBE), PROBE):
+    # Both 5200 BIOS images open with the 1 KB Atari character table, which
+    # the built-in Altirra OS legitimately carries too: probing it would flag
+    # every build as "embedding the BIOS". Start past it.
+    first = 1024 if len(data) >= 1536 else 0
+
+    for start in range(first, max(first + 1, len(data) - PROBE), PROBE):
         chunk = data[start:start + PROBE]
         if len(chunk) != PROBE:
             continue
