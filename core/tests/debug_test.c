@@ -14,6 +14,12 @@
 #include "a52debug.h"
 #include "test_tmpdir.h"
 
+#ifdef _WIN32
+#define NULL_DEVICE "NUL"
+#else
+#define NULL_DEVICE "/dev/null"
+#endif
+
 static void test_sleep_ms(int ms)
 {
     struct timespec ts = {ms / 1000, (long)(ms % 1000) * 1000000L};
@@ -318,8 +324,8 @@ int main(void)
         a52debug_write(d, 0x4000, b[0]);
         a52debug_map_get(d, &m2);
         CHECK(m2.queue_depth == 0 && m2.swaps == 0, "poke made no cycle");
-        CHECK(a52debug_save(d, "arena", "/dev/null", msg, sizeof msg) == 0, "save arena");
-        CHECK(a52debug_save(d, "cart", "/dev/null", msg, sizeof msg) == 0, "save cart");
+        CHECK(a52debug_save(d, "arena", NULL_DEVICE, msg, sizeof msg) == 0, "save arena");
+        CHECK(a52debug_save(d, "cart", NULL_DEVICE, msg, sizeof msg) == 0, "save cart");
     }
 
     /* FujiNet is off: the state says so, and the trace is empty but works */

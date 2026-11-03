@@ -38,8 +38,11 @@ static int wait_accept(int lfd, int ms)
     int t;
     for (t = 0; t < ms; t += 20) {
         int c = accept(lfd, NULL, NULL);
-        if (c >= 0)
+        if (c >= 0) {
+            /* BSD/macOS: an accepted socket inherits the listener's O_NONBLOCK */
+            fcntl(c, F_SETFL, fcntl(c, F_GETFL, 0) & ~O_NONBLOCK);
             return c;
+        }
         test_sleep_ms(20);
     }
     return -1;
