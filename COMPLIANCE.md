@@ -41,8 +41,10 @@ CONFIG is staged from the firmware.
 
 ## Icon and name
 
-The icon is the Atari 5200 controller (stick, keypad, START and PAUSE),
-drawn for this project from the console photo, in the silver of the brushed
-band on the black case (`tools/icons/draw-mark.py`, `tools/icons/make-icons.py`). "Atari" and "5200"
+The icon is the FujiNet Go family mark on the family's rounded square, in the
+Atari 5200's colours from the console photo: the black case as the
+background and the brushed silver band as the mark
+(`tools/icons/make-icons.py`; the artwork is byte-identical to the sibling
+apps'). "Atari" and "5200"
 are trademarks of Atari Interactive, used to name the machine emulated; the
 project is not affiliated with or endorsed by Atari.

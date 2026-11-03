@@ -75,7 +75,15 @@
          it cannot disagree with the tree; past releases are literal and go
          above it as they are made. The release job checks that this first
          entry is still a template. -->
-    <release version="@PROJECT_VERSION@" date="2026-11-02">
+    <release version="@PROJECT_VERSION@" date="2026-11-03">
+      <description>
+        <p>
+          The icon is back on the FujiNet family's rounded square and mark, in
+          the 5200's black and silver, in every package and on every platform.
+        </p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-11-02">
       <description>
         <p>
           First release: atari800 in 5200 mode with the FujiNet cartridge and

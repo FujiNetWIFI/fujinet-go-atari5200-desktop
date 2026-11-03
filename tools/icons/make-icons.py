@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Render the desktop icon set from the shared FujiNet Go launcher art.
 
-The artwork (data/icons/src/fujinet-go-atari5200-foreground.png) is the
-5200 controller drawn by tools/icons/draw-mark.py (white = shape, black =
-detail), composited over this product's own background colour, so the family
-still shares one construction while each target gets its own badge.
+The artwork (data/icons/src/fujinet-go-atari5200-foreground.png) is the exact
+same transparent FujiNet mark the other desktop apps use -- byte-identical
+to the siblings' copies -- composited over this product's own background
+colour, so the whole family reads as one product line while each target
+still gets a distinct badge colour.
 
-Colours are the Atari 5200's own, sampled from the console photo:
+Colours are the Atari 5200's own, from the console photo:
 
   * Background #2A2A2A, the console's black case.
-  * The mark is recoloured through a two-stop gradient on its brightness:
-    the white body and stick become the brushed-silver band #C4C6CA, and
-    the black keys and base become a dark steel #4C4E52.
-  * Contrast, silver on case: 8.4:1 (checked below, asserted at run time).
-  * The UI accent is a mid silver #9A9CA0 (A52SESSION_ACCENT_RGB), for
-    fills only on dark themes: it is too light for text on a light theme,
-    so a darker variant #5E6064 serves there. The POWER legend's orange
-    (#D2662D) is reserved for the "FujiNet connected" indicator.
+  * The family mark is recoloured through a two-stop gradient on its
+    brightness: the white discs and lines become the brushed-silver band
+    #C4C6CA (8.4:1 on the case, asserted at run time), and the black centre
+    disc becomes dark steel #4C4E52.
+  * The UI accent is a mid silver (A52SESSION_ACCENT_RGB in
+    core/include/a52session.h); the POWER-legend orange #D2662D is kept for
+    the "FujiNet connected" indicator.
 
 Everything else about the composite (rounded-square mask, corner radius,
 foreground zoom, output sizes) matches the sibling repos' own
@@ -32,7 +32,7 @@ re-run this only when the artwork or background colour changes:
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 FOREGROUND = ROOT / "data/icons/src/fujinet-go-atari5200-foreground.png"
@@ -41,8 +41,8 @@ ICNS_OUT = ROOT / "data/icons/fujinet-go-atari5200.icns"
 ICO_OUT = ROOT / "frontends/windows/app.ico"
 
 BACKGROUND = (0x2A, 0x2A, 0x2A, 0xFF)    # #2A2A2A, the 5200's black case
-SILVER = (0xC4, 0xC6, 0xCA)              # the brushed-silver band
-STEEL = (0x4C, 0x4E, 0x52)               # the centre disc
+SILVER = (0xC4, 0xC6, 0xCA)                # the brushed-silver band
+STEEL = (0x4C, 0x4E, 0x52)                # dark steel, the centre disc
 MASTER = 1024                            # render big, downsample with LANCZOS
 CORNER_RADIUS = 0.22                     # fraction of the edge
 FOREGROUND_ZOOM = 1.18                   # Android's mask crops; compensate a little
@@ -55,16 +55,15 @@ def contrast(fg, bg) -> float:
         c /= 255
         return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
     def lum(rgb):
-        r, g, b = (lin(c) for c in rgb[:3])
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
-    hi, lo = sorted((lum(fg), lum(bg)), reverse=True)
-    return (hi + 0.05) / (lo + 0.05)
+        return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2])
+    a, b = sorted((lum(fg), lum(bg)), reverse=True)
+    return (a + 0.05) / (b + 0.05)
 
 
 def render_master() -> Image.Image:
     art = Image.open(FOREGROUND).convert("RGBA")
-    # Recolour by brightness (alpha untouched: it is the mark's shape):
-    # white -> SILVER, black -> STEEL, edges in between.
+    # Recolour by brightness (the alpha channel is the mark's shape and must
+    # not change): white -> SILVER, black -> STEEL.
     r, g, b, a = art.split()
     lum = Image.merge("RGB", (r, g, b)).convert("L")
     chans = [lum.point(lambda v, lo=STEEL[i], hi=SILVER[i]: int(lo + (hi - lo) * v / 255))
@@ -104,6 +103,7 @@ def main() -> int:
     ratio = contrast(SILVER, BACKGROUND)
     print(f"mark contrast {ratio:.1f}:1")
     assert ratio >= 7.0, "mark too faint on the case colour"
+
     master = render_master()
     for size in SIZES:
         out = OUTDIR / f"{size}x{size}" / "apps" / "fujinet-go-atari5200.png"
