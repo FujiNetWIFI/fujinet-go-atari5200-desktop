@@ -1,0 +1,53 @@
+# Build trees. The negation matters: build-aux/ is SOURCE (flatpak manifests,
+# the NSIS installer script), and "build*/" swallows it -- new manifests then
+# never show up as untracked and quietly go missing from CI.
+build*/
+!build-aux/
+
+# Provisioned dependencies. cmake/Dependencies.cmake fetches these at their
+# pinned commits, so they are build output, not source -- and committing them
+# as bare gitlinks (which `git add -A` will happily do once they exist
+# locally) is worse than not tracking them at all.
+third_party/
+
+# Staged sources: cmake/StageFujiProto.cmake copies the cartridge firmware's
+# own sources here. Never edit these; edit the firmware checkout and re-stage
+# with -DFUJI_RESTAGE=ON.
+core/cart/fuji-generated/
+
+# FujiNet runtime build tree (tools/fujinet/build-fujinet-desktop.sh).
+tools/fujinet/work/
+
+# Atari's own images, which a developer keeps here for the no_embedded_roms
+# check or a WITH_A5200_ROMS build (see COMPLIANCE.md). Never committed.
+tools/roms/*
+!tools/roms/embed-roms.py
+
+# ROM and cartridge images that stray into the tree while testing. The only
+# image this project ships is FujiNet's own CONFIG client, staged from the
+# firmware; the tests build their own. (data/icons/** and the screenshots are
+# .png, not covered.)
+*.rom
+*.ROM
+*.a52
+*.A52
+*.bin
+*.car
+*.zip
+
+.cache/
+compile_commands.json
+.flatpak-builder/
+__pycache__/
+*.pyc
+
+# assembler byproducts
+*.o
+*.p
+*.lst
+
+# MAME's run-time directories, when it is run from the repo root
+/cfg/
+/nvram/
+/snap/
+/diff/

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>online.fujinet.go.atari5200.kde</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>FujiNet Go Atari 5200 (KDE)</name>
+  <summary>Atari 5200 with a built-in FujiNet cartridge</summary>
+  <description>
+    <p>
+      A self-contained Atari 5200 SuperSystem with a FujiNet built in: browse
+      network hosts from the console, boot games and programs over the
+      network, and let a FujiNet program keep talking to the network, all in
+      one application.
+    </p>
+    <p>
+      FujiNet's CONFIG program is built in and starts at power-on, exactly as
+      on the FujiNet Atari 5200 cartridge. Local cartridge images (.a52, .bin,
+      .rom, .car, or a zip holding one) can be opened in its place: the
+      FujiNet cartridge serves them as a game, choosing the right board, and
+      the console power-cycles into it. Power Cycle brings CONFIG back, as
+      switching a real 5200 off and on does.
+    </p>
+    <p>
+      The emulator is atari800, forced into 5200 mode, with the FujiNet
+      cartridge running the real cartridge firmware's own protocol and
+      page-mapping sources and talking to an in-process FujiNet.
+    </p>
+    <p>
+      The Controllers window draws the 5200 controller, with its analog stick,
+      its two fire buttons, its 12-key keypad and START, PAUSE and RESET;
+      click and hold to press, drag the stick, and Map rebinds any key,
+      direction or button to a key or a gamepad button, for all four ports.
+      Gamepads are picked up as they are plugged in and out. A native debugger
+      shows the 6502, disassembly with breakpoints and watchpoints, ANTIC and
+      its display list, GTIA, POKEY, the memory map and every packet on the
+      FujiNet cartridge's link.
+    </p>
+    <p>
+      Nothing copyrighted is included: the Altirra 5200 OS is built in, so no
+      BIOS is needed. Atari's own BIOS can be imported from files, a zip or a
+      folder; game cartridge images are your own to open.
+    </p>
+  </description>
+  <launchable type="desktop-id">online.fujinet.go.atari5200.kde.desktop</launchable>
+  <icon type="stock">online.fujinet.go.atari5200.kde</icon>
+  <!-- Software centres classify from these, not from the .desktop
+       Categories= line; without them the app lands in no section at all. -->
+  <categories>
+    <category>Game</category>
+    <category>Emulator</category>
+  </categories>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The FujiNet CONFIG client running on the console</caption>
+      <image>https://raw.githubusercontent.com/FujiNetWIFI/fujinet-go-atari5200-desktop/v0.1.0/data/screenshots/kde/1_running_config.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The debugger: disassembly with the BIOS's labels</caption>
+      <image>https://raw.githubusercontent.com/FujiNetWIFI/fujinet-go-atari5200-desktop/v0.1.0/data/screenshots/kde/2_debugger.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The Controllers window: the 5200 controller with its keypad</caption>
+      <image>https://raw.githubusercontent.com/FujiNetWIFI/fujinet-go-atari5200-desktop/v0.1.0/data/screenshots/kde/3_controllers.png</image>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://fujinet.online/</url>
+  <url type="bugtracker">https://github.com/FujiNetWIFI/fujinet-go-atari5200-desktop/issues</url>
+  <url type="vcs-browser">https://github.com/FujiNetWIFI/fujinet-go-atari5200-desktop</url>
+  <developer id="online.fujinet">
+    <name>FujiNet</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <!-- The CURRENT release templates its version from @PROJECT_VERSION@, so
+         it cannot disagree with the tree; past releases are literal and go
+         above it as they are made. The release job checks that this first
+         entry is still a template. -->
+    <release version="@PROJECT_VERSION@" date="2026-11-02">
+      <description>
+        <p>
+          First release: atari800 in 5200 mode with the FujiNet cartridge and
+          an in-process FujiNet over BoIP, the built-in Altirra 5200 OS, BIOS
+          import, native GNOME, KDE, macOS and Windows frontends, the
+          controller with its keypad on screen, hotplugged gamepads and a
+          native debugger.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

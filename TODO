@@ -1,0 +1,17 @@
+FujiNet Go Atari 5200 desktop -- milestones
+
+[ ] M0  skeleton: staged + patched atari800 forced into 5200 mode, headless runner, boot + A/B tests, icons
+[ ] M1  session without FujiNet: host thread, pacing, audio, video blits, BIOS import
+[ ] M2  FujiNet cartridge: device model + planner, BoIP link to libfujinet, runtime build, auto-update pin
+[ ] M3  Open / drop: cartridge images through the planner, power cycle
+[ ] M4  input: 4 controllers, analog stick, keypad, START/PAUSE/RESET, gamepads
+[ ] M5  debugger engine (debug_test: ASan + TSan clean) + FujiNet trace tab
+[ ] M6  GNOME frontend
+[ ] M7  KDE frontend
+[ ] M8  Windows frontend (D3D11 display, GUI log capture)
+[ ] M9  macOS frontend (CI is the first compile)
+[ ] M10 packaging, CI, release (v0.1.0)
+
+Open / unverified
+  - the 5200 PAL timing and palette
+  - screenshots in data/screenshots are placeholders until shot from the 5200 build

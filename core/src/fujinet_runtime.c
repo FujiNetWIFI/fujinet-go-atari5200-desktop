@@ -1,0 +1,411 @@
+/*
+ * fujinet_runtime.c -- the in-process FujiNet (libfujinet, the RS232 runtime).
+ *
+ * FujiNet LISTENS on A52SESSION_BOIP_PORT (BoIP FujiBus over TCP, loopback)
+ * and the emulated cartridge (core/cart) DIALS in, reconnecting whenever the
+ * link drops: a FujiNet restart needs nothing from the console. A watchdog
+ * restarts a runtime that rebooted itself (the web UI's restart) and leaves
+ * one stopped that was asked to exit. Speech comes back through read_audio
+ * and is mixed by the audio callback (or drained when there is no audio
+ * device).
+ *
+ * Copyright (C) 2026 Thomas Cherryhomes
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#if defined(_WIN32)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
+#include <stdlib.h>
+
+#include "compat.h"
+#include "dynlib.h"
+#include "session_internal.h"
+
+typedef int (*start_runtime_fn)(const char *root, const char *config, const char *sd,
+                                const char *data, int listen_port);
+typedef void (*stop_runtime_fn)(void);
+typedef const char *(*last_error_fn)(void);
+typedef int (*copy_log_fn)(char *out, int max_bytes);
+typedef int (*int_fn)(void);
+typedef int (*read_audio_fn)(int16_t *out, int max_samples, int rate);
+
+/* One runtime per process: the library owns global state and threads. */
+static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
+static a52_dynlib g_handle;
+static start_runtime_fn g_start;
+static stop_runtime_fn g_stop;
+static last_error_fn g_last_error;
+static copy_log_fn g_copy_log;
+static int_fn g_is_running, g_exit_code;
+static read_audio_fn g_read_audio;
+
+/* the watchdog */
+static pthread_t g_watch;
+static int g_watch_started;
+static volatile int g_watch_quit;
+static struct a52session *g_session;
+static unsigned g_generation;
+static char g_event[160];
+static time_t g_restart_times[3];
+
+static void set_event(const char *fmt, const char *arg)
+{
+    snprintf(g_event, sizeof g_event, fmt, arg ? arg : "");
+    g_generation++;
+}
+
+static int load_library_locked(struct a52session *s)
+{
+    char errbuf[256];
+    if (g_handle)
+        return 0;
+    g_handle = a52_dynlib_open(s->fujinet_lib);
+    if (!g_handle) {
+        session_set_error(s, "FujiNet library load failed: %s",
+                          a52_dynlib_error(errbuf, sizeof errbuf));
+        return -1;
+    }
+    g_start = (start_runtime_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_start_runtime");
+    g_stop = (stop_runtime_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_stop_runtime");
+    g_last_error = (last_error_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_last_error_message");
+    g_copy_log = (copy_log_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_copy_recent_log");
+    g_is_running = (int_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_is_running");
+    g_exit_code = (int_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_exit_code");
+    g_read_audio = (read_audio_fn)a52_dynlib_sym(g_handle, "fujinet_desktop_read_audio");
+    if (!g_start || !g_stop || !g_last_error) {
+        session_set_error(s, "%s is missing the desktop runtime contract", s->fujinet_lib);
+        g_start = NULL;
+        return -1;
+    }
+    return 0;
+}
+
+int session_fujinet_available(struct a52session *s)
+{
+    if (s->fujinet_disabled)
+        return 0;
+    return paths_provision_fujinet(s) == 0;
+}
+
+/* The [BOIP] section, every start: the web UI could have changed it. */
+static void assert_boip_config(struct a52session *s)
+{
+    FILE *fp = fopen(s->fujinet_config, "rb");
+    char *text = NULL, *out;
+    long n = 0;
+    const char *section = "[BOIP]\nenabled=1\nhost=127.0.0.1\nport=11524\n";
+    char *start, *end;
+    if (fp) {
+        fseek(fp, 0, SEEK_END);
+        n = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        text = calloc(1, (size_t)n + 1);
+        if (text && fread(text, 1, (size_t)n, fp) != (size_t)n)
+            n = 0;
+        fclose(fp);
+    }
+    if (!text)
+        text = calloc(1, 1);
+    out = malloc((size_t)n + strlen(section) + 4);
+    if (!out) {
+        free(text);
+        return;
+    }
+    start = strstr(text, "[BOIP]");
+    if (start) {
+        end = strstr(start + 6, "\n[");
+        end = end ? end + 1 : text + n;
+        snprintf(out, (size_t)n + strlen(section) + 4, "%.*s%s%s", (int)(start - text), text,
+                 section, end);
+    }
+    else {
+        snprintf(out, (size_t)n + strlen(section) + 4, "%s%s%s", text,
+                 n && text[n - 1] != '\n' ? "\n" : "", section);
+    }
+    fp = fopen(s->fujinet_config, "wb");
+    if (fp) {
+        fwrite(out, 1, strlen(out), fp);
+        fclose(fp);
+    }
+    free(out);
+    free(text);
+}
+
+static int start_locked(struct a52session *s)
+{
+    char bind[64];
+    if (load_library_locked(s) != 0)
+        return -1;
+    assert_boip_config(s);
+    snprintf(bind, sizeof bind, "127.0.0.1:%d", A52SESSION_WEBUI_PORT);
+    a52_setenv("FUJINET_WEBUI_BIND", bind);
+    /* the flash filesystem and the CA bundle are rooted here, not the CWD */
+    a52_setenv("FUJINET_RUNTIME_ROOT", s->fujinet_root);
+    if (!g_start(s->fujinet_root, s->fujinet_config, s->fujinet_sd, s->fujinet_data,
+                 A52SESSION_BOIP_PORT)) {
+        const char *err = g_last_error ? g_last_error() : NULL;
+        session_set_error(s, "FujiNet failed to start: %s", err && *err ? err : "(unknown)");
+        return -1;
+    }
+    s->fujinet_running = 1;
+    return 0;
+}
+
+static void *watch_main(void *arg)
+{
+    struct a52session *s = arg;
+    int16_t drain[2048];
+    while (!g_watch_quit) {
+        a52_sleep_ms(50);
+        pthread_mutex_lock(&g_mtx);
+        if (s->fujinet_running && g_is_running && g_exit_code && !g_is_running()) {
+            int code = g_exit_code();
+            s->fujinet_running = 0;
+            if (code == 75) {
+                time_t now = time(NULL);
+                if (now - g_restart_times[0] < 30) {
+                    set_event("FujiNet keeps restarting; it is stopped (FujiNet > Restart)", NULL);
+                }
+                else {
+                    memmove(g_restart_times, g_restart_times + 1, sizeof g_restart_times[0] * 2);
+                    g_restart_times[2] = now;
+                    if (start_locked(s) == 0)
+                        set_event("FujiNet restarted", NULL);
+                    else
+                        set_event("FujiNet could not restart: %.120s", s->last_error);
+                }
+            }
+            else {
+                set_event("FujiNet stopped", NULL);
+            }
+        }
+        /* no audio device to mix SAM into: keep the queue moving */
+        if (s->fujinet_running && !s->audio && g_read_audio)
+            while (g_read_audio(drain, (int)(sizeof drain / sizeof drain[0]), A52SESSION_AUDIO_RATE) > 0)
+                ;
+        pthread_mutex_unlock(&g_mtx);
+    }
+    return NULL;
+}
+
+int session_fujinet_start(struct a52session *s)
+{
+    int rc;
+    pthread_mutex_lock(&g_mtx);
+    if (s->fujinet_running) {
+        pthread_mutex_unlock(&g_mtx);
+        return 0;
+    }
+    rc = start_locked(s);
+    if (rc == 0 && !g_watch_started) {
+        g_session = s;
+        g_watch_quit = 0;
+        g_watch_started = pthread_create(&g_watch, NULL, watch_main, s) == 0;
+    }
+    pthread_mutex_unlock(&g_mtx);
+    if (rc != 0)
+        fprintf(stderr, "a52: %s (continuing without FujiNet)\n", s->last_error);
+    return rc;
+}
+
+void session_fujinet_stop(struct a52session *s)
+{
+    stop_runtime_fn stop = NULL;
+    if (g_watch_started) {
+        g_watch_quit = 1;
+        pthread_join(g_watch, NULL);
+        g_watch_started = 0;
+    }
+    pthread_mutex_lock(&g_mtx);
+    if (s->fujinet_running) {
+        stop = g_stop;
+        s->fujinet_running = 0;
+    }
+    pthread_mutex_unlock(&g_mtx);
+    if (stop)
+        stop();
+}
+
+int a52session_fujinet_restart(a52session *s)
+{
+    int rc = -1;
+    if (!s->fujinet_wanted || s->fujinet_external)
+        return -1;
+    pthread_mutex_lock(&g_mtx);
+    if (s->fujinet_running) {
+        g_stop();
+        s->fujinet_running = 0;
+    }
+    rc = start_locked(s);
+    set_event(rc == 0 ? "FujiNet restarted" : "FujiNet could not restart", NULL);
+    pthread_mutex_unlock(&g_mtx);
+    return rc;
+}
+
+/* Waits for FujiNet's BoIP listener to accept a connection (the cartridge
+ * dials it; the listener has to exist before the console's first
+ * transaction). */
+int session_fujinet_wait_for_boip(struct a52session *s, int timeout_ms)
+{
+    int t;
+    if (!s->fujinet_running)
+        return -1;
+    for (t = 0;; t += 25) {
+        int fd = (int)socket(AF_INET, SOCK_STREAM, 0);
+        if (fd >= 0) {
+            struct sockaddr_in addr;
+            int ok;
+            memset(&addr, 0, sizeof addr);
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(A52SESSION_BOIP_PORT);
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            ok = connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0;
+            a52_closesocket(fd);
+            if (ok)
+                return 0;
+        }
+        if (t >= timeout_ms)
+            return -1;
+        a52_sleep_ms(25);
+    }
+}
+
+void session_fujinet_mix(struct a52session *s, float *stereo, int frames, float gain)
+{
+    int16_t buf[1024];
+    int got, i;
+    if (!s->fujinet_running || !g_read_audio || frames <= 0)
+        return;
+    if (frames > 1024)
+        frames = 1024;
+    got = g_read_audio(buf, frames, A52SESSION_AUDIO_RATE);
+    for (i = 0; i < got; i++) {
+        float v = buf[i] * gain / 32768.0f;
+        stereo[i * 2] += v;
+        stereo[i * 2 + 1] += v;
+    }
+}
+
+int a52session_fujinet_running(const a52session *s)
+{
+    return s->fujinet_running;
+}
+
+int a52session_fujinet_external(const a52session *s)
+{
+    return s->fujinet_external;
+}
+
+const char *a52session_fujinet_endpoint(const a52session *s)
+{
+    return s->boip_endpoint[0] ? s->boip_endpoint : "127.0.0.1:11524";
+}
+
+int a52session_parse_hostport(const char *text, char *host, int hostsz, int *port)
+{
+    char buf[80], *colon, *end;
+    const char *hst = "127.0.0.1";
+    long num = A52SESSION_BOIP_PORT;
+    size_t len;
+
+    if (!text)
+        text = "";
+    while (*text == ' ' || *text == '\t')
+        text++;
+    len = strlen(text);
+    while (len && (text[len - 1] == ' ' || text[len - 1] == '\t' || text[len - 1] == '\n' ||
+                   text[len - 1] == '\r'))
+        len--;
+    if (len >= sizeof buf)
+        return -1;
+    memcpy(buf, text, len);
+    buf[len] = '\0';
+
+    if (len) {
+        colon = strrchr(buf, ':');
+        if (colon) {
+            *colon = '\0';
+            hst = buf;
+            if (!*hst)
+                return -1;
+            text = colon + 1;
+        }
+        else {
+            text = buf;
+        }
+        if (!*text)
+            return -1;
+        num = strtol(text, &end, 10);
+        if (*end || num < 1 || num > 65535)
+            return -1;
+        if (colon) {
+            /* An IPv4 literal (or "localhost"). */
+            int oct[4], used = 0, idx;
+            if (strcmp(hst, "localhost") != 0) {
+                if (sscanf(hst, "%d.%d.%d.%d%n", &oct[0], &oct[1], &oct[2], &oct[3], &used) != 4 ||
+                    hst[used])
+                    return -1;
+                for (idx = 0; idx < 4; idx++)
+                    if (oct[idx] < 0 || oct[idx] > 255)
+                        return -1;
+            }
+        }
+    }
+    if ((int)strlen(hst) >= hostsz)
+        return -1;
+    memcpy(host, hst, strlen(hst) + 1);
+    *port = (int)num;
+    return 0;
+}
+
+const char *a52session_fujinet_webui_url(const a52session *s)
+{
+    return s->webui_url;
+}
+
+int a52session_fujinet_copy_log(a52session *s, char *dst, int max)
+{
+    copy_log_fn fn;
+    (void)s;
+    if (!dst || max <= 0)
+        return 0;
+    dst[0] = '\0';
+    pthread_mutex_lock(&g_mtx);
+    fn = g_copy_log;
+    pthread_mutex_unlock(&g_mtx);
+    return fn ? fn(dst, max) : 0;
+}
+
+unsigned a52session_fujinet_generation(a52session *s)
+{
+    unsigned g;
+    (void)s;
+    pthread_mutex_lock(&g_mtx);
+    g = g_generation;
+    pthread_mutex_unlock(&g_mtx);
+    return g;
+}
+
+int a52session_fujinet_last_event(a52session *s, char *dst, int dstsz)
+{
+    int n;
+    (void)s;
+    pthread_mutex_lock(&g_mtx);
+    n = snprintf(dst, (size_t)dstsz, "%s", g_event);
+    pthread_mutex_unlock(&g_mtx);
+    return n;
+}

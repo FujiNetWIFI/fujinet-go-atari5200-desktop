@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=FujiNet Go Atari 5200 (GNOME)
+GenericName=Atari 5200 Console Emulator
+Comment=The Atari 5200 with a built-in FujiNet cartridge
+Exec=fujinet-go-atari5200-gnome %f
+Icon=online.fujinet.go.atari5200.gnome
+Terminal=false
+Categories=Game;Emulator;
+Keywords=atari;5200;supersystem;console;atari800;fujinet;emulator;retro;
+StartupNotify=true

@@ -1,0 +1,96 @@
+From: Thomas Cherryhomes <thom.cherryhomes@gmail.com>
+Subject: [PATCH] MEMORY_cart_get/put and CPU_jmp_ind_hook: a host-served 5200 cartridge
+
+The FujiNet 5200 cartridge is a device on the cart edge that serves reads and
+sees every access (no R/W line), so a host must be able to take over
+$4000-$BFFF: MEMORY_cart_get/put receive every hardware access to those pages
+(the host marks them MEMORY_HARDWARE), and CPU_jmp_ind_hook reports a JMP
+(abcd), because the cart's hand-over stub is executed from the cartridge and
+the CPU core fetches code from MEMORY_mem directly.
+---
+diff --git a/src/cpu.c b/src/cpu.c
+index 5061a86..5cb70b7 100644
+--- a/src/cpu.c
++++ b/src/cpu.c
+@@ -195,6 +195,7 @@ static int service_pokey_irq;
+ #endif /* NEW_CYCLE_EXACT */
+ 
+ /* 6502 registers. */
++void (*CPU_jmp_ind_hook)(UWORD pc) = NULL;
+ UWORD CPU_regPC;
+ UBYTE CPU_regA;
+ UBYTE CPU_regX;
+@@ -1564,6 +1565,8 @@ void CPU_GO(int limit)
+ 		CPU_remember_jmp_curpos = (CPU_remember_jmp_curpos + 1) % CPU_REMEMBER_JMP_STEPS;
+ #endif
+ 		ABSOLUTE;
++		if (CPU_jmp_ind_hook != NULL)
++			CPU_jmp_ind_hook((UWORD) (GET_PC() - 3));
+ #ifdef CPU65C02
+ 		/* XXX: if ((UBYTE) addr == 0xff) ANTIC_xpos++; */
+ 		SET_PC(MEMORY_dGetWord(addr));
+diff --git a/src/cpu.h b/src/cpu.h
+index 72124a9..02ed196 100644
+--- a/src/cpu.h
++++ b/src/cpu.h
+@@ -55,6 +55,11 @@ extern UBYTE CPU_regP;
+ extern UBYTE CPU_regS;
+ extern UBYTE CPU_regY;
+ extern UBYTE CPU_regX;
++/* Called by JMP (abcd) with the address of the JMP, before the vector is
++   read: the FujiNet 5200 cartridge's hand-over stub (JMP ($FFFC) at $B5F0)
++   is executed from the cartridge, whose opcode fetches the CPU core does not
++   route through the memory handlers. */
++extern void (*CPU_jmp_ind_hook)(UWORD pc);
+ 
+ #define CPU_SetN CPU_regP |= CPU_N_FLAG
+ #define CPU_ClrN CPU_regP &= (~CPU_N_FLAG)
+diff --git a/src/memory.c b/src/memory.c
+index 197e0a9..1a27c30 100644
+--- a/src/memory.c
++++ b/src/memory.c
+@@ -1065,10 +1065,15 @@ void MEMORY_GetCharset(UBYTE *cs)
+ 	memcpy(cs + 0x300, ROM_altirra_5200_os + 0x300, 0x100); /* lowercase letters */
+ }
+ 
++UBYTE (*MEMORY_cart_get)(UWORD addr, int no_side_effects) = NULL;
++void (*MEMORY_cart_put)(UWORD addr, UBYTE byte) = NULL;
++
+ #ifndef PAGED_MEM
+ UBYTE MEMORY_HwGetByte(UWORD addr, int no_side_effects)
+ {
+ 	UBYTE byte = 0xff;
++	if (MEMORY_cart_get != NULL && addr >= 0x4000 && addr < 0xc000)
++		return MEMORY_cart_get(addr, no_side_effects);
+ 	switch (addr & 0xff00) {
+ 	case 0x4f00:
+ 	case 0x8f00:
+@@ -1149,6 +1154,10 @@ UBYTE MEMORY_HwGetByte(UWORD addr, int no_side_effects)
+ 
+ void MEMORY_HwPutByte(UWORD addr, UBYTE byte)
+ {
++	if (MEMORY_cart_put != NULL && addr >= 0x4000 && addr < 0xc000) {
++		MEMORY_cart_put(addr, byte);
++		return;
++	}
+ 	switch (addr & 0xff00) {
+ 	case 0x4f00:
+ 	case 0x8f00:
+diff --git a/src/memory.h b/src/memory.h
+index 4519ac6..a160340 100644
+--- a/src/memory.h
++++ b/src/memory.h
+@@ -131,6 +131,13 @@ extern int MEMORY_enable_mapram;
+ #ifndef PAGED_MEM
+ /* Reads a byte from the specified special address (not RAM or ROM). */
+ UBYTE MEMORY_HwGetByte(UWORD addr, int safe);
++/* A host-served cartridge (the FujiNet 5200 cart): when set, every hardware
++   access to $4000-$BFFF goes to these instead of atari800's cartridge code
++   (the host marks those pages MEMORY_HARDWARE itself). A write is a cycle on
++   the cart edge too. ANTIC still reads MEMORY_mem directly, so the host keeps
++   MEMORY_mem[$4000-$BFFF] equal to what the cart serves. */
++extern UBYTE (*MEMORY_cart_get)(UWORD addr, int no_side_effects);
++extern void (*MEMORY_cart_put)(UWORD addr, UBYTE byte);
+ 
+ /* Stores a byte at the specified special address (not RAM or ROM). */
+ void MEMORY_HwPutByte(UWORD addr, UBYTE byte);

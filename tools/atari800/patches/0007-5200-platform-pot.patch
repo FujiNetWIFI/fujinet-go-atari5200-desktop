@@ -1,0 +1,20 @@
+From: Thomas Cherryhomes <thom.cherryhomes@gmail.com>
+Subject: [PATCH] 5200: analog sticks from a platform's Atari_POT
+
+With PLATFORM_POT the 5200 branch of INPUT_Frame reads Atari_POT(2*port) and
+(2*port+1) first, as the Dreamcast port does, and falls back to the digital
+STICK only while both sit at the centre (114).
+---
+diff --git a/src/input.c b/src/input.c
+index c0694f4..7f2132e 100644
+--- a/src/input.c
++++ b/src/input.c
+@@ -632,7 +632,7 @@ void INPUT_Frame(void)
+ 	}
+ 	else {
+ 		for (i = 0; i < 4; i++) {
+-#ifdef DREAMCAST
++#if defined(DREAMCAST) || defined(PLATFORM_POT)
+ 			/* first get analog js data */
+ 			POKEY_POT_input[2 * i] = Atari_POT(2 * i);         /* x */
+ 			POKEY_POT_input[2 * i + 1] = Atari_POT(2 * i + 1); /* y */
