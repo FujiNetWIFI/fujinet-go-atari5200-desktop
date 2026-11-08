@@ -45,6 +45,7 @@
 #include "SettingsDialog.h"
 #include "controllers/ControllersWindow.h"
 #include "debugger/DebuggerWindow.h"
+#include "help/HelpWindow.h"
 
 static const char *const kAnyFilter =
     "5200 cartridges and BIOS images (*.a52 *.bin *.rom *.car *.zip);;All files (*)";
@@ -55,6 +56,7 @@ MainWindow::MainWindow(a52session *session, QWidget *parent)
     : QMainWindow(parent), m_session(session)
 {
     setWindowTitle(QStringLiteral("FujiNet Go Atari 5200"));
+    setProperty("a52HelpContext", QStringLiteral("main"));
     /* 336 x 240 at three times, a TV's shape */
     resize(864, 720 + 60);
     setAcceptDrops(true);
@@ -239,6 +241,12 @@ void MainWindow::buildMenus()
     });
 
     QMenu *help = menuBar()->addMenu(QStringLiteral("&Help"));
+    connect(appShortcut(this, help->addAction(QStringLiteral("FujiNet Go Atari 5200 &Help")),
+                        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H)),
+            &QAction::triggered, this, [this] {
+        a52HelpFor(QApplication::activeWindow() ? QApplication::activeWindow() : this);
+    });
+    help->addSeparator();
     help->addAction(QStringLiteral("&About FujiNet Go Atari 5200"), this, &MainWindow::showAbout);
 }
 

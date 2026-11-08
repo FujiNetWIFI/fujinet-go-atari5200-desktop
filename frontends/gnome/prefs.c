@@ -18,6 +18,7 @@
  */
 
 #include "prefs.h"
+#include "help/help_window.h"
 
 #include "controllers/controllers_window.h"
 
@@ -466,6 +467,12 @@ void a52_prefs_show(A52Window *parent, a52session *session)
         if (!last_group || strcmp(last_group, p->group) != 0) {
             group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
             adw_preferences_group_set_title(group, p->group);
+            if (!last_group) {
+                /* the first group on a page carries the page's Help button */
+                char ctx[64];
+                g_snprintf(ctx, sizeof ctx, "prefs/%s", p->page);
+                adw_preferences_group_set_header_suffix(group, a52_help_button(ctx));
+            }
             if (!strcmp(p->group, "Console") || !strcmp(p->group, "Console BIOS"))
                 adw_preferences_group_set_description(group,
                     "Console settings apply together when Preferences closes: the 5200 "

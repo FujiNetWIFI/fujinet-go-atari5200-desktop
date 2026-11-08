@@ -29,6 +29,7 @@
  */
 
 #include "dbg_window.h"
+#include "../help/help_window.h"
 
 #include <commctrl.h>
 #include <commdlg.h>
@@ -86,7 +87,7 @@ static const struct { const char *name, *label; } k_tabs[TAB_COUNT] = {
 
 enum {
     IDC_RUN = 1000, IDC_STEP, IDC_OVER, IDC_OUT, IDC_FRAME, IDC_RUN_TO, IDC_BRK,
-    IDC_STATUS, IDC_SYMBOLS, IDC_SAVE, IDC_TABS,
+    IDC_STATUS, IDC_SYMBOLS, IDC_SAVE, IDC_HELP_BTN, IDC_TABS,
     IDC_CON_OUT, IDC_CON_PROMPT, IDC_CON_IN,
     IDC_REG0, IDC_REG_LAST = IDC_REG0 + 5,
     IDC_FLAG0, IDC_FLAG_LAST = IDC_FLAG0 + 5,
@@ -117,7 +118,7 @@ static const struct { const char *kind, *title, *file; } k_saves[2] = {
 typedef struct {
     HWND hwnd, tabs, tip;
     HWND run_btn, step_btn, over_btn, out_btn, frame_btn, run_to_btn, brk_btn, status;
-    HWND sym_btn, save_btn;
+    HWND sym_btn, save_btn, help_btn;
 
     /* console */
     HWND con_out, con_prompt, con_in;
@@ -1955,10 +1956,11 @@ static void build_controls(debugger *d)
     if (d->ndim < (int)(sizeof d->dim / sizeof d->dim[0])) d->dim[d->ndim++] = d->status;
     d->sym_btn = button(d, "Load Symbols...", IDC_SYMBOLS);
     d->save_btn = button(d, "Save...", IDC_SAVE);
+    d->help_btn = button(d, "Help", IDC_HELP_BTN);
     {
-        HWND bar[10] = { d->run_btn, d->step_btn, d->over_btn, d->out_btn, d->frame_btn, d->run_to_btn,
-                         d->brk_btn, d->status, d->sym_btn, d->save_btn };
-        for (i = 0; i < 10; i++) ShowWindow(bar[i], SW_SHOW);
+        HWND bar[11] = { d->run_btn, d->step_btn, d->over_btn, d->out_btn, d->frame_btn, d->run_to_btn,
+                         d->brk_btn, d->status, d->sym_btn, d->save_btn, d->help_btn };
+        for (i = 0; i < 11; i++) ShowWindow(bar[i], SW_SHOW);
     }
     tip(d, d->step_btn, "One instruction");
     tip(d, d->over_btn, "Over a JSR, to the instruction after it");
@@ -2075,8 +2077,16 @@ static void build_controls(debugger *d)
     d->fuji_state = view(d, IDC_FUJI_STATE, WS_HSCROLL);
 }
 
+/* Help's contexts (a52help.h), one per tab */
+static const char *const k_tab_contexts[TAB_COUNT] = {
+    "debugger/console", "debugger/cpu", "debugger/disassembly", "debugger/antic", "debugger/gtia",
+    "debugger/pokey", "debugger/map", "debugger/breakpoints", "debugger/fujinet",
+};
+
 static void show_page(debugger *d, int page)
 {
+    /* Help, F1 and Ctrl+Shift+H open the tab's section */
+    if (page >= 0 && page < TAB_COUNT) a52_help_set_context(d->hwnd, k_tab_contexts[page], 1);
     HWND console[] = { d->con_out, d->con_prompt, d->con_in };
     HWND cpu[] = { d->beam, d->mem_title, d->mem_view, d->hist_title, d->hist_view, d->goto_label, d->mem_goto,
                    d->mem_back, d->mem_on, d->write_label, d->mem_addr, d->value_label, d->mem_val, d->mem_hint };
@@ -2135,8 +2145,8 @@ static void layout(debugger *d)
                          d->brk_btn };
         const char *ltext[7] = { "Stop (F5)", "Step (F7)", "Step Over (F8)", "Step Out (Shift+F8)",
                                  "Frame (F9)", "Run to Cursor", "Break on BRK" };
-        HWND rgt[2] = { d->sym_btn, d->save_btn };
-        const char *rtext[2] = { "Load Symbols...", "Save..." };
+        HWND rgt[3] = { d->sym_btn, d->save_btn, d->help_btn };
+        const char *rtext[3] = { "Load Symbols...", "Save...", "Help" };
         int right = client.right - S(d, 8);
         x = S(d, 8);
         for (i = 0; i < 7; i++) {
@@ -2144,7 +2154,7 @@ static void layout(debugger *d)
             place(left[i], x, S(d, 8), w, bh);
             x += w + gap;
         }
-        for (i = 1; i >= 0; i--) {
+        for (i = 2; i >= 0; i--) {
             w = btn_w(d, rtext[i]);
             right -= w;
             place(rgt[i], right, S(d, 8), w, bh);
@@ -2487,6 +2497,7 @@ static LRESULT CALLBACK dbg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         case IDC_SYMBOLS: on_symbols(d); return 0;
         case IDC_SAVE: save_menu(d); return 0;
+        case IDC_HELP_BTN: a52_help_for(d->hwnd); return 0;
         case IDC_SAVE_DIS: on_save(d, 0); return 0;
         case IDC_SAVE_RAM: on_save(d, 1); return 0;
         case IDC_MEM_BACK: on_mem_page(d, -1); return 0;

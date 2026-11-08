@@ -33,7 +33,7 @@
       Gamepads are picked up as they are plugged in and out. A native debugger
       shows the 6502, disassembly with breakpoints and watchpoints, ANTIC and
       its display list, GTIA, POKEY, the memory map and every packet on the
-      FujiNet cartridge's link.
+      FujiNet cartridge's link. Built-in, searchable Help covers all of it.
     </p>
     <p>
       Nothing copyrighted is included: the Altirra 5200 OS is built in, so no

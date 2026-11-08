@@ -31,6 +31,7 @@ add_executable(fujinet-go-atari5200-macos MACOSX_BUNDLE
   BiosImport.m
   DisplayView.m
   KeyForward.m
+  help/HelpWindow.m
   SettingsWindow.m
   controllers/ControllersWindow.m
   debugger/DebuggerWindow.m

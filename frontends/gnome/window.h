@@ -18,6 +18,10 @@ GtkWidget *a52_window_new(AdwApplication *app, a52session *session);
 const char *a52_icon_name(void);
 void a52_window_toast(A52Window *self, const char *text);
 
+/* The Help context the main window shows now: "main", or "prefs/<page>"
+ * while Preferences is open. */
+const char *a52_window_help_context(A52Window *self);
+
 /* Starts the machine (FujiNet first). */
 void a52_window_start(A52Window *self);
 

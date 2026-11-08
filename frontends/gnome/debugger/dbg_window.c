@@ -31,6 +31,7 @@
  */
 
 #include "dbg_window.h"
+#include "../help/help_window.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +60,12 @@ static const struct { const char *name, *label; } k_tabs[TAB_COUNT] = {
     { "antic", "ANTIC" }, { "gtia", "GTIA" }, { "pokey", "POKEY" },
     { "map", "Memory Map" }, { "breakpoints", "Breakpoints" },
     { "fujinet", "FujiNet" },
+};
+
+/* Help's contexts (a52help.h), one per tab */
+static const char *const k_tab_contexts[TAB_COUNT] = {
+    "debugger/console", "debugger/cpu", "debugger/disassembly", "debugger/antic", "debugger/gtia",
+    "debugger/pokey", "debugger/map", "debugger/breakpoints", "debugger/fujinet",
 };
 
 static const int k_regs[6] = { A52_REG_PC, A52_REG_SP, A52_REG_A, A52_REG_X,
@@ -1681,7 +1688,11 @@ static void on_save(GtkButton *b, gpointer ud)
 
 static void on_switch_page(GtkNotebook *nb, GtkWidget *page, guint num, gpointer ud)
 {
+    DbgWin *w = ud;
     (void)nb; (void)page;
+    /* each tab has its own Help topic; the header bar's button follows it */
+    if (num < TAB_COUNT)
+        a52_help_set_context(w->win, k_tab_contexts[num]);
     refresh_page(ud, (int)num);
 }
 
@@ -1699,6 +1710,7 @@ static gboolean on_key(GtkEventControllerKey *c, guint keyval, guint code,
     DbgWin *w = ud;
     (void)c; (void)code;
     switch (keyval) {
+    case GDK_KEY_F1: a52_help_for(w->win); return TRUE;
     case GDK_KEY_F5: on_run(NULL, w); return TRUE;
     case GDK_KEY_F7: on_step(NULL, w); return TRUE;
     case GDK_KEY_F8:
@@ -2234,6 +2246,7 @@ void a52_debugger_show(GtkWindow *parent, a52session *session)
     gtk_box_append(GTK_BOX(root), notebook);
     tab = tab_from_env();
     if (tab >= 0) gtk_notebook_set_current_page(w->notebook, tab);
+    a52_help_set_context(w->win, k_tab_contexts[tab >= 0 ? tab : 0]);
     g_signal_connect(notebook, "switch-page", G_CALLBACK(on_switch_page), w);
 
     overlay = adw_toast_overlay_new();
@@ -2242,6 +2255,7 @@ void a52_debugger_show(GtkWindow *parent, a52session *session)
 
     header = adw_header_bar_new();
     build_header(w, ADW_HEADER_BAR(header));
+    adw_header_bar_pack_end(ADW_HEADER_BAR(header), a52_help_button(NULL));
     toolbar = adw_toolbar_view_new();
     adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(toolbar), header);
     adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(toolbar), overlay);

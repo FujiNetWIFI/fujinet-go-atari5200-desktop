@@ -38,6 +38,7 @@
 #include "debugger/dbg_window.h"
 #include "display.h"
 #include "fujilog.h"
+#include "help/help_window.h"
 #include "import.h"
 #include "key_forward.h"
 #include "prefs.h"
@@ -398,7 +399,9 @@ static void build_menu(HWND hwnd)
     AppendMenuA(fuji, MF_STRING, IDM_FUJINET_LOG, "Console &Log");
     AppendMenuA(fuji, MF_STRING, IDM_FUJINET_RESTART, "&Restart FujiNet");
 
-    AppendMenuA(help, MF_STRING, IDM_HELP, "&Help\tF6");
+    AppendMenuA(help, MF_STRING, IDM_HELP_TOPICS, APP_TITLE " &Help\tCtrl+Shift+H");
+    AppendMenuA(help, MF_SEPARATOR, 0, NULL);
+    AppendMenuA(help, MF_STRING, IDM_HELP, "&Keys\tF6");
     AppendMenuA(help, MF_STRING, IDM_ABOUT, "&About " APP_TITLE);
 
     AppendMenuA(bar, MF_POPUP, (UINT_PTR)console, "&Console");
@@ -748,6 +751,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             update_status();
             return 0;
         case IDM_HELP: show_help(); return 0;
+        case IDM_HELP_TOPICS: a52_help_for(hwnd); return 0;
         case IDM_ABOUT: show_about(); return 0;
         case IDM_EXIT: PostMessage(hwnd, WM_CLOSE, 0, 0); return 0;
         default: break;
@@ -897,6 +901,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
         int scaled[2] = { a52_scale(parts[0], a52_window_dpi(g_hwnd)), -1 };
         SendMessageA(g_statusbar, SB_SETPARTS, 2, (LPARAM)scaled);
     }
+    a52_help_set_context(g_hwnd, "main", 0);       /* F1 is the console's RESET here */
     g_display = a52_display_create(g_hwnd, g_session);
     a52_display_set_options(g_aspect, g_smooth);
     layout_children();
@@ -935,6 +940,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
          * regardless of which child control has the focus. */
         if (a52_debugger_pretranslate(&msg)) continue;
         if (a52_prefs_pretranslate(&msg)) continue;
+        if (a52_help_pretranslate(&msg)) continue;
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }

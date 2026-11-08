@@ -32,6 +32,7 @@
 #import "DebuggerWindow.h"
 
 #import "../KeyForward.h"
+#import "../help/HelpWindow.h"
 
 #include <float.h>
 #include <stdarg.h>
@@ -707,6 +708,8 @@ static const char *bpTypeName(int type)
 - (void)tabView:(NSTabView *)tabView didSelectTabViewItem:(NSTabViewItem *)item
 {
     (void)tabView;
+    /* The Help button and Command+? open the tab being shown. */
+    A52SetHelpContext(_window, [@"debugger/" stringByAppendingString:item.identifier]);
     [item.view layoutSubtreeIfNeeded];
     [self refreshPage:[self currentTab]];
 }
@@ -844,7 +847,9 @@ static const char *bpTypeName(int type)
     NSPopUpButton *save = [self pullDown:@"Save…" items:saves action:@selector(saveFile:)];
     [save.widthAnchor constraintEqualToConstant:84].active = YES;
 
-    NSStackView *bar = hstack(@[_runBtn, step, over, outBtn, frame, runTo, _brkBtn, _status, sym, save]);
+    NSButton *helpBtn = A52HelpButton(nil);
+    [helpBtn setRefusesFirstResponder:YES];
+    NSStackView *bar = hstack(@[_runBtn, step, over, outBtn, frame, runTo, _brkBtn, _status, sym, save, helpBtn]);
     bar.distribution = NSStackViewDistributionFill;
     return bar;
 }
@@ -1188,6 +1193,7 @@ static const char *bpTypeName(int type)
     const int tab = tabFromEnv();
     if (tab >= 0) [_tabs selectTabViewItemAtIndex:tab];
     _tabs.delegate = self;
+    A52SetHelpContext(_window, [@"debugger/" stringByAppendingString:_tabs.selectedTabViewItem.identifier]);
     [_tabs setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationVertical];
 
     /* messages (Load Symbols, Save ...) along the foot */

@@ -46,6 +46,7 @@
 #import "ControllersWindow.h"
 
 #import "../KeyForward.h"
+#import "../help/HelpWindow.h"
 
 #include <math.h>
 #include <string.h>
@@ -473,6 +474,7 @@ static void stickDeflection(A52Ctl *c, NSPoint p, int *x, int *y)
     int _padRows;
     unsigned _padGeneration;
     NSButton *_mapButton;
+    NSButton *_helpButton;
     NSButton *_defaultsButton;
     NSButton *_showKeysBox;
     NSTextField *_mouseLabel;
@@ -505,6 +507,7 @@ static void stickDeflection(A52Ctl *c, NSPoint p, int *x, int *y)
                     backing:NSBackingStoreBuffered
                       defer:NO];
     [_panel setTitle:@"Controllers"];
+    A52SetHelpContext(_panel, @"controllers");
     /* Floats above the machine's window, a full-screen one too. */
     [_panel setLevel:NSFloatingWindowLevel];
     [_panel setCollectionBehavior:NSWindowCollectionBehaviorFullScreenAuxiliary];
@@ -556,6 +559,9 @@ static void stickDeflection(A52Ctl *c, NSPoint p, int *x, int *y)
     _defaultsButton = [NSButton buttonWithTitle:@"Defaults" target:self action:@selector(restoreDefaults:)];
     [_defaultsButton setRefusesFirstResponder:YES];
     [_content addSubview:_defaultsButton];
+    _helpButton = A52HelpButton(@"controllers");
+    [_helpButton setRefusesFirstResponder:YES];
+    [_content addSubview:_helpButton];
     _showKeysBox = [NSButton checkboxWithTitle:@"Show keys" target:self action:@selector(toggleShowKeys:)];
     [_showKeysBox setState:_console.showKeys ? NSControlStateValueOn : NSControlStateValueOff];
     [_showKeysBox setRefusesFirstResponder:YES];
@@ -709,6 +715,7 @@ static CGFloat snap(CGFloat v)
     [_mapButton setFrame:NSMakeRect(MARGIN, mapY, 76, BTN_H)];
     [_defaultsButton setFrame:NSMakeRect(MARGIN + 82, mapY, 96, BTN_H)];
     [_showKeysBox setFrame:NSMakeRect(MARGIN + 190, mapY + 3, 110, 22)];
+    [_helpButton setFrameOrigin:NSMakePoint(MARGIN + inner - _helpButton.frame.size.width, mapY + 2)];
     [_mouseLabel setFrame:NSMakeRect(MARGIN, mouseY + 3, 190, 18)];
     [_mousePort setFrame:NSMakeRect(MARGIN + 196, mouseY - 1, POPUP_W + 10, 25)];
     [_hint setFrame:NSMakeRect(MARGIN, hintY, inner, 34)];

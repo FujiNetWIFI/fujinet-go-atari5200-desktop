@@ -19,6 +19,7 @@
 #include "debugger/dbg_window.h"
 #include "display.h"
 #include "fujilog.h"
+#include "help/help_window.h"
 #include "prefs.h"
 
 #include <string.h>
@@ -268,6 +269,12 @@ static gboolean on_key_pressed(GtkEventControllerKey *ctrl, guint keyval, guint 
 {
     A52Window *self = user_data;
     (void)ctrl;
+    /* with Preferences or a dialog open, F1 is Help (F6 is the Atari's HELP) */
+    if (keyval == GDK_KEY_F1 && ui_has_keyboard(self) &&
+        !(state & GDK_MODIFIER_MASK & ~GDK_LOCK_MASK)) {
+        a52_help_for(GTK_WINDOW(self));
+        return TRUE;
+    }
     if (ui_has_keyboard(self))
         return FALSE;
     return a52_window_key(self, keyval, keycode, state, TRUE);
@@ -883,7 +890,8 @@ static void action_about(GSimpleAction *a, GVariant *p, gpointer user_data)
     adw_dialog_present(about, GTK_WIDGET(self));
 }
 
-static void action_help(GSimpleAction *a, GVariant *p, gpointer user_data)
+/* The app's short list of keys (F6); Help proper is app.help. */
+static void action_keys(GSimpleAction *a, GVariant *p, gpointer user_data)
 {
     A52Window *self = user_data;
     (void)a; (void)p;
@@ -900,12 +908,39 @@ static void action_help(GSimpleAction *a, GVariant *p, gpointer user_data)
         "Ctrl+Shift+W Warp, Ctrl+Shift+Q Quit.");
 }
 
+const char *a52_window_help_context(A52Window *self)
+{
+    static char ctx[64];
+    AdwDialog *d = adw_application_window_get_visible_dialog(ADW_APPLICATION_WINDOW(self));
+
+    if (d && ADW_IS_PREFERENCES_DIALOG(d)) {
+        const char *page = adw_preferences_dialog_get_visible_page_name(ADW_PREFERENCES_DIALOG(d));
+        if (page) {
+            g_snprintf(ctx, sizeof ctx, "prefs/%s", page);
+            return ctx;
+        }
+    }
+    return "main";
+}
+
+/* app.help: every window's Ctrl+Shift+H, for what it shows. Not a cast of
+ * the active window: it can be the debugger, the controllers or the log. */
+static void action_help(GSimpleAction *a, GVariant *p, gpointer user_data)
+{
+    (void)a; (void)p;
+    a52_help_for(gtk_application_get_active_window(GTK_APPLICATION(user_data)));
+}
+
+static const GActionEntry app_actions[] = {
+    { "help", action_help, NULL, NULL, NULL, { 0 } },
+};
+
 static const GActionEntry win_actions[] = {
     { "open", action_open, NULL, NULL, NULL, { 0 } },
     { "power-cycle", action_power_cycle, NULL, NULL, NULL, { 0 } },
     { "reset", action_reset, NULL, NULL, NULL, { 0 } },
     { "reboot-config", action_reboot_config, NULL, NULL, NULL, { 0 } },
-    { "help", action_help, NULL, NULL, NULL, { 0 } },
+    { "help", action_keys, NULL, NULL, NULL, { 0 } },
     { "warp", action_warp, NULL, "false", NULL, { 0 } },
     { "import-bios", action_import_bios, "i", NULL, NULL, { 0 } },
     { "import-sd", action_import_sd, NULL, NULL, NULL, { 0 } },
@@ -970,7 +1005,8 @@ static GMenu *build_menu(A52Window *self)
     g_menu_append_section(menu, "FujiNet", G_MENU_MODEL(fujim));
 
     g_menu_append(app, "_Preferences", "win.prefs");
-    g_menu_append(app, "_Help (F6)", "win.help");
+    g_menu_append(app, "_Help", "app.help");
+    g_menu_append(app, "_Keys (F6)", "win.help");
     g_menu_append(app, "_About FujiNet Go Atari 5200", "win.about");
     g_menu_append(app, "_Quit", "win.quit");
     g_menu_append_section(menu, NULL, G_MENU_MODEL(app));
@@ -1071,6 +1107,9 @@ GtkWidget *a52_window_new(AdwApplication *app, a52session *session)
 
     g_action_map_add_action_entries(G_ACTION_MAP(self), win_actions, G_N_ELEMENTS(win_actions),
                                     self);
+    if (!g_action_map_lookup_action(G_ACTION_MAP(app), "help"))
+        g_action_map_add_action_entries(G_ACTION_MAP(app), app_actions,
+                                        G_N_ELEMENTS(app_actions), app);
     {
         /* information rows in the menu: shown, never active */
         GSimpleAction *info = g_simple_action_new("cart-noop", NULL);
@@ -1087,7 +1126,9 @@ GtkWidget *a52_window_new(AdwApplication *app, a52session *session)
         static const char *const copy[] = { "<Control><Shift>c", NULL };
         static const char *const paste[] = { "<Control><Shift>v", NULL };
         static const char *const warp[] = { "<Control><Shift>w", NULL };
+        static const char *const help[] = { "<Control><Shift>h", NULL };
         GtkApplication *a = GTK_APPLICATION(app);
+        gtk_application_set_accels_for_action(a, "app.help", help);
         gtk_application_set_accels_for_action(a, "win.prefs", prefs);
         gtk_application_set_accels_for_action(a, "win.quit", quit);
         gtk_application_set_accels_for_action(a, "win.open", open);

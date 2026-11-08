@@ -11,7 +11,7 @@
 
 #include "a52session.h"
 
-@interface A52SettingsWindow : NSObject <NSWindowDelegate, NSTextFieldDelegate>
+@interface A52SettingsWindow : NSObject <NSWindowDelegate, NSTextFieldDelegate, NSTabViewDelegate>
 /* onLive runs after each live change (the view follows); onClosed when the
  * window closes, with the a52_apply that applying the rest needed. */
 - (instancetype)initWithSession:(a52session *)session

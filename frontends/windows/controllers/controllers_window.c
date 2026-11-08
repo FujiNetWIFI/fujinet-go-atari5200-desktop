@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../help/help_window.h"
 #include "../key_forward.h"
 #include "../win_common.h"
 
@@ -70,6 +71,7 @@
 #define BTN_H       28
 #define MAP_W       64
 #define DEFAULTS_W  80
+#define HELP_W      64
 #define ACT_W      104
 
 #define IDT_CAPTURE 1
@@ -117,7 +119,7 @@ static int g_stick_shown[A52_PORTS][2];     /* the analog deflection last painte
 static int g_total_w, g_total_h;
 static RECT g_silver_rc, g_plate_rc, g_strip_rc, g_stick_rc[A52_PORTS], g_stick_title_rc[A52_PORTS];
 static RECT g_gp_rc, g_gp_head_rc, g_gp_row_rc[PAD_ROWS];
-static RECT g_map_rc, g_defaults_rc, g_hint_rc;
+static RECT g_map_rc, g_defaults_rc, g_help_rc, g_hint_rc;
 
 static HBRUSH g_accent_brush;
 static HFONT g_font, g_bold, g_small, g_cap, g_cap_in, g_cap_tiny, g_sym;
@@ -352,6 +354,7 @@ static void layout_static(void)
 
     SetRect(&g_map_rc, left, y, left + S(MAP_W), y + S(BTN_H));
     SetRect(&g_defaults_rc, g_map_rc.right + S(6), y, g_map_rc.right + S(6) + S(DEFAULTS_W), y + S(BTN_H));
+    SetRect(&g_help_rc, left + content_w - S(HELP_W), y, left + content_w, y + S(BTN_H));
     y += S(BTN_H) + S(6);
     SetRect(&g_hint_rc, left, y, left + content_w, y + S(20));
     g_total_h = y + S(20) + S(MARGIN);
@@ -793,6 +796,8 @@ static void paint_panel(HDC dc)
     text_line(dc, g_map_state == -2 ? "Map" : "Done", &g_map_rc, DT_CENTER);
     draw_face(dc, &g_defaults_rc, 0, 0, 0);
     text_line(dc, "Defaults", &g_defaults_rc, DT_CENTER);
+    draw_face(dc, &g_help_rc, 0, 0, 0);
+    text_line(dc, "Help", &g_help_rc, DT_CENTER);
     SetTextColor(dc, GetSysColor(COLOR_GRAYTEXT));
     text_line(dc, g_hint, &g_hint_rc, DT_LEFT | DT_END_ELLIPSIS);
 }
@@ -1002,6 +1007,7 @@ static LRESULT CALLBACK panel_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         p.y = GET_Y_LPARAM(lp);
         SetFocus(hwnd);
         if (PtInRect(&g_map_rc, p)) { set_map_state(g_map_state == -2 ? -1 : -2); return 0; }
+        if (PtInRect(&g_help_rc, p)) { a52_help_show(hwnd, "controllers"); return 0; }
         if (PtInRect(&g_defaults_rc, p)) {
             a52session_bindings_reset(g_session);
             set_hint("Every key and button is back to its default");
@@ -1187,6 +1193,7 @@ static int create_panel(void)
                               CW_USEDEFAULT, CW_USEDEFAULT, want.right - want.left, want.bottom - want.top,
                               g_parent, NULL, inst, NULL);
     if (!g_panel) return 0;
+    a52_help_set_context(g_panel, "controllers", 0);    /* F1 is the console's RESET here */
     rescale(a52_window_dpi(g_panel));    /* placed on another monitor than the main window */
     fit_client();
     memset(&g_pads_shown, 0, sizeof g_pads_shown);

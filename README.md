@@ -67,6 +67,15 @@ plugged in and out; the left stick or d-pad is the analog stick, the face
 buttons the fire buttons), or map keys there. Dragging with the mouse in the
 display moves the analog stick of the selected port.
 
+### Help
+
+**Help ▸ FujiNet Go Atari 5200 Help** (Ctrl+Shift+H, ⌘? on a Mac) opens a
+searchable Help, and the Help buttons in Preferences, the Controllers window,
+the debugger and the console log open the topic for what they show. F6 still
+shows the app's short list of keys (**Keys**). The text is
+[data/help/help.md](data/help/help.md), which GitHub shows as it is; the build
+embeds it and every frontend lays it out natively.
+
 ### Debugger (F12)
 
 Stops the machine. Run/Stop F5, Step F7, Step Over F8, Step Out Shift+F8,

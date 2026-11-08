@@ -38,7 +38,7 @@ if(TARGET a52_session)
   foreach(_spec
       "session;180;0" "roms;120;0" "prefs;120;0" "input;120;0" "media;180;1"
       "hostport;60;0" "external;120;1" "debug;180;0" "video;120;0"
-      "gamepad;120;0" "gamepad_hotplug;120;0" "config_boot;180;0")
+      "gamepad;120;0" "gamepad_hotplug;120;0" "config_boot;180;0" "help;60;0")
     list(GET _spec 0 _t)
     list(GET _spec 1 _timeout)
     list(GET _spec 2 _serial)
