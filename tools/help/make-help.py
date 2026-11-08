@@ -48,6 +48,9 @@ SPAN_NAMES = ("TEXT", "BOLD", "ITALIC", "CODE", "KBD", "LINK", "CELL")
 # The app's shortcuts as a Mac shows them (the Mac frontend's menus): Ctrl is
 # Command there, and Help is the Help menu's own key.
 KBD_MAC_FIXED = {
+    "Shift+F5": "⇧F5",
+    "Ctrl+Shift+O": "⌘O",
+    "Ctrl+Shift+Q": "⌘Q",
     "Ctrl+,": "⌘,",
     "Ctrl+Shift+H": "⌘?",
     "Shift+F8": "⇧F8",
@@ -363,7 +366,7 @@ def parse(src_text):
                     raise HelpError(f"line {ln}: end without only:")
                 platforms, in_only = ALL, None
             else:
-                if not re.fullmatch(r"[a-z]+(-[a-z]+)*(/[A-Za-z]+)?", arg):
+                if not re.fullmatch(r"[a-z]+(-[a-z]+)*(/[A-Za-z0-9]+)?", arg):
                     raise HelpError(f"line {ln}: bad context {arg!r}")
                 context = (arg, ln)
             numbered = 0
