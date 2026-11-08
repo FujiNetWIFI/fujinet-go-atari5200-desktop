@@ -75,7 +75,15 @@
          it cannot disagree with the tree; past releases are literal and go
          above it as they are made. The release job checks that this first
          entry is still a template. -->
-    <release version="@PROJECT_VERSION@" date="2026-11-03">
+    <release version="@PROJECT_VERSION@" date="2026-11-07">
+      <description>
+        <p>
+          Fixed a freeze when a gamepad trigger was pressed with the
+          Controllers window open.
+        </p>
+      </description>
+    </release>
+    <release version="0.1.1" date="2026-11-03">
       <description>
         <p>
           The icon is back on the FujiNet family's rounded square and mark, in
