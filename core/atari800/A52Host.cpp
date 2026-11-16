@@ -18,6 +18,7 @@
 #endif
 
 #include "A52Host.h"
+#include "apple_realtime.h"
 
 extern "C" {
 #include "config.h"
@@ -159,6 +160,7 @@ void* A52Host::ThreadMain(void* self)
 
 void A52Host::ThreadBody()
 {
+	apple_realtime_begin(1e9 / 60.0);   // a real-time slot on macOS; a no-op elsewhere
 	tOnEmulationThread = true;
 #if defined(_WIN32)
 	timeBeginPeriod(1);

@@ -137,6 +137,7 @@ static NSString *str(const char *s)
     BOOL _launched;
     NSWindow *_window;
     A52DisplayView *_display;
+    id<NSObject> _activity;          /* no App Nap, no timer coalescing while we run */
     A52ContentView *_content;
     A52Light *_linkLight;
     NSTextField *_statusText;
@@ -195,6 +196,13 @@ static NSString *str(const char *s)
 - (void)applicationDidFinishLaunching:(NSNotification *)note
 {
     (void)note;
+
+    /* An emulator is latency-critical work: App Nap must not throttle the
+     * machine thread or coalesce its timers when the window is behind
+     * another, and Game Mode (Info.plist) asks the system to favour it. */
+    _activity = [[NSProcessInfo processInfo]
+        beginActivityWithOptions:(NSActivityUserInitiated | NSActivityLatencyCritical)
+                          reason:@"Emulating an Atari 5200"];
 
     /* the 4:3 picture at three times */
     const NSRect frame = NSMakeRect(0, 0, 864, 648 + STATUS_HEIGHT);
@@ -351,6 +359,10 @@ static NSString *str(const char *s)
     [_hookTimer invalidate];
     [_logTimer invalidate];
     [_display stop];
+    if (_activity) {
+        [[NSProcessInfo processInfo] endActivity:_activity];
+        _activity = nil;
+    }
     a52session_stop(_session);
     a52session_settings_flush(_session);
     a52session_free(_session);
