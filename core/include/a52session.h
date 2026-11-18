@@ -44,6 +44,38 @@ extern "C" {
 #define A52SESSION_ACCENT_RGB      0xD2642B
 #define A52SESSION_ACCENT_DARK_RGB 0x9C4318
 
+/* The CX52 controller as the Controllers window draws it, in 0xRRGGBB, read
+ * from photos of the real thing (controllers-port/DESIGN-5200.md; +/- 8%).
+ * Every frontend uses these, so the four toolkits draw the same controller.
+ * They replace the old per-frontend constants (0x2A2A2A case, 0xB8B8BC band,
+ * 0xE8C547 digits, 0x8A2A22 fire). */
+#define A52SESSION_CASE_RGB          0x1E1E1E   /* the black textured body */
+#define A52SESSION_CASE_BEVEL_RGB    0x34343A   /* bevel highlight */
+#define A52SESSION_CASE_SHADOW_RGB   0x0E0E10   /* deep shadow */
+#define A52SESSION_WELL_RGB          0x121214   /* the recessed keypad well */
+#define A52SESSION_KEY_RGB           0x17171A   /* the keys' black caps */
+#define A52SESSION_SLOT_RGB          0x2A2A2E   /* the overlay slot's bar */
+#define A52SESSION_STICK_SHAFT_RGB   0x141414   /* the ribbed shaft and its cap */
+#define A52SESSION_STICK_BOOT_RGB    0x0C0C0C   /* the rubber boot */
+#define A52SESSION_DISH_RIM_LO_RGB   0x26262A   /* the dish's chamfered rim, dark edge */
+#define A52SESSION_DISH_RIM_HI_RGB   0x4A4A50   /* ... and its bright edge */
+#define A52SESSION_BAND_HI_RGB       0xD8D8DC   /* the brushed aluminium band (top) */
+#define A52SESSION_BAND_LO_RGB       0x8E8E94   /* ... (bottom) */
+#define A52SESSION_BAND_TEXT_RGB     0x6A6A70   /* "ATARI 5200" on the band (inferred) */
+#define A52SESSION_RAINBOW_ORANGE_RGB 0xE8762A  /* the rainbow line under the text */
+#define A52SESSION_RAINBOW_YELLOW_RGB 0xF2C21B
+#define A52SESSION_RAINBOW_BLUE_RGB   0x3A5FC8
+#define A52SESSION_RAINBOW_GREEN_RGB  0x58A83A
+#define A52SESSION_LEGEND_RGB        0xF2C21B   /* the keypad's yellow legends */
+#define A52SESSION_START_RGB         0x3FA37A   /* START legend (green) */
+#define A52SESSION_PAUSE_RGB         0xF2C21B   /* PAUSE legend (yellow) */
+#define A52SESSION_RESET_RGB         0xC8302A   /* RESET legend (red) */
+#define A52SESSION_FIRE_RGB          0xD8322A   /* the red side buttons */
+#define A52SESSION_FIRE_HI_RGB       0xF05A48   /* ... their highlight */
+/* A held control: a ring in this colour with a 35% fill of it (the 5200
+ * accent above would be too dark on black plastic). */
+#define A52SESSION_HELD_RGB          0xFFB04A
+
 typedef struct a52session a52session;
 typedef struct a52debug a52debug;
 
@@ -193,14 +225,17 @@ int  a52session_render_audio(a52session *s, float *stereo, int nframes);
 void a52session_set_volume(a52session *s, int percent);
 
 /* ---- input targets ----------------------------------------------------------
- * Four controller ports. Per port: the analog stick (digital directions drive
- * it to its ends; a52session_stick_set / the gamepads' left stick are analog),
- * FIRE (the two side buttons: one wire) and FIRE2 (the two top buttons).
+ * Four controller ports (two with the 2-port BIOS, a52session_active_ports).
+ * Per port: the analog stick (digital directions drive it to its ends;
+ * a52session_stick_set / the gamepads' left stick are analog), FIRE (the
+ * upper pair of side buttons, left and right in parallel) and FIRE2 (the
+ * lower pair).
  * Then the console keys: the 12-key pad 0-9 * #, START, PAUSE and RESET.
  * atari800 (like MAME) scans ONE keypad and ONE "second fire" for all four
  * controllers (the hardware's per-controller select is not emulated), so the
  * keys and FIRE2 are common: pressing them on any controller is the same.
- * Frontends draw one keypad/key panel and a joystick per port. */
+ * Frontends draw a CX52 per port from a52session_controls_layout; its keypad
+ * parts all show the one shared state. */
 typedef enum {
     A52_ACT_UP = 0, A52_ACT_DOWN, A52_ACT_LEFT, A52_ACT_RIGHT, A52_ACT_FIRE,
     A52_ACT_FIRE2, A52_ACT_PER_PORT
@@ -232,33 +267,134 @@ const char *a52_target_name(int target);       /* "Controller 1: Up", "Key 5", "
 const char *a52_target_short_name(int target); /* "Up", "5", "#", "START" */
 const char *a52_key_label(int key);            /* "0".."9","*","#","START","PAUSE","RESET" */
 
-/* Apply one control directly (keyboard bindings, on-screen buttons). */
+/* How many controllers the console has: 2 when the loaded BIOS is the 2-port
+ * one (CRC c2ba2613), else 4 (the built-in Altirra OS, the 4-port 4248d3e3).
+ * It follows the BIOS the running console loaded: a changed "bios" setting
+ * counts from the restart apply_settings does. The window draws that many
+ * controllers and the gamepad layer assigns pads to no more ports than this
+ * (an assignment past it falls back to Automatic). */
+int a52session_active_ports(a52session *s);
+
+/* ---- who holds what ---------------------------------------------------------
+ * Every way of holding an input is a source of its own (the keyboard, the
+ * Controllers window's pointer, each gamepad's buttons and its stick) and the
+ * console sees their merge (opposed directions cancel). One source letting go
+ * can only release what it held itself: a key release never drops a pad's
+ * direction, a window drag ending at 0,0 never cancels a pad's deflection.
+ *
+ * a52session_press / a52session_stick_set are the WINDOW's pointer source (a
+ * pressed part, the stick drag). a52session_key is the KEYBOARD's. */
+/* Apply one control from the window (a pressed part). A system-action target
+ * fires on the press and is never held. */
 void a52session_press(a52session *s, int target, int down);
 void a52session_sysaction(a52session *s, int sysact);
+/* Focus loss: lets go of the KEYBOARD's holds and nothing else. The window's
+ * own holds go with a52session_release_pointer (its focus loss) and the
+ * gamepads release themselves. */
 void a52session_release_all(a52session *s);
-/* What the console sees held on a port right now (keyboard + gamepads'
- * digital inputs), 1 << a52_action; and which console keys are held,
- * 1 << a52_key. For the controllers window's highlights. */
+/* Lets go of everything the window's pointer holds: pressed parts and the
+ * stick drag. */
+void a52session_release_pointer(a52session *s);
+/* Keyboard and pointer both (the gamepads keep theirs). */
+void a52session_clear_held(a52session *s);
+/* What the console sees held on a port right now (all sources merged),
+ * 1 << a52_action; and which console keys are held, 1 << a52_key. For the
+ * controllers window's highlights. */
 unsigned a52session_buttons_held(a52session *s, int port);
 unsigned a52session_keys_held(a52session *s);
-/* The analog stick of `port` right now: x,y -128..127 (+ right, + DOWN, SDL's
- * and the screen's convention); 0,0 = centre. Includes the digital
- * directions (as full deflection) and the gamepad sticks. */
+/* 1 while any source holds the target (a direction, FIRE, FIRE2 or a console
+ * key); 0 for anything else, system actions included. */
+int a52session_target_held(a52session *s, int target);
+/* The analog stick of `port` right now: x,y -127..127 (+ right, + DOWN, SDL's
+ * and the screen's convention); 0,0 = centre. The strongest deflection of any
+ * source (pad sticks, the window's drag); when none deflects it, the digital
+ * directions as full deflection. */
 void a52session_stick_get(a52session *s, int port, int *x, int *y);
 /* Drive the analog stick of `port` from a pointer (the controllers window's
- * mouse drag, the picture's mouse mode): x,y -128..127 (+ right, + DOWN),
- * clamped; 0,0 releases it. One more source beside the gamepads (strongest
- * deflection wins). Call it with 0,0 when the drag ends. */
+ * mouse drag, the picture's mouse mode): x,y -127..127 (+ right, + DOWN),
+ * clamped; 0,0 releases it. The pointer is one source beside each pad's:
+ * the strongest deflection wins, so 0,0 never cancels a pad. Call it with
+ * 0,0 when the drag ends. */
 void a52session_stick_set(a52session *s, int port, int x, int y);
 /* On (the default; setting "analog_stick"): a gamepad's left stick is analog
  * (radial dead zone 12%). Off: an eight-way switch driving the digital
  * directions. Takes effect at once. */
 void a52session_set_analog(a52session *s, int on);
 
-/* The controller as printed, for the on-screen panel: the 12-key pad (3x4)
- * and START / PAUSE / RESET, one entry per cap in cap units (1.0 = a keypad
- * key) from the top left. `key` is a52_key (its binding target is
- * A52_TARGET_KEY(key)). Static; valid for the process. */
+/* ---- the Controllers window's layout ----------------------------------------
+ * One table says what the window draws and where, so the four toolkits cannot
+ * drift apart (DESIGN-5200.md): one CX52 per active port side by side, and a
+ * line under them (A52_SHARED_NOTE: atari800 scans one keypad and one FIRE 2,
+ * so a key held on any controller lights on all of them). Layout units: a
+ * controller's body is 12 x 31 u, +y down, the stick end at the top; the fire
+ * buttons stick out 0.7 u on both sides, so a controller cell is 13.4 u wide
+ * with 1.0 u between cells. Parts are in paint order; no colours (the
+ * A52SESSION_*_RGB above).
+ *
+ * What each kind is, and what the window does with it:
+ *   CABLE, BODY, BAND, DISH, WELL, SLOT   drawn only. BODY's box is the wide
+ *                  stick end: the wedge tapers to A52_BODY_BOTTOM_W at the
+ *                  keypad end (symmetric about the box's centre). BAND is the
+ *                  silver strip (clipped to the body, "ATARI 5200" and the
+ *                  rainbow line drawn on it); DISH the stick's round dish
+ *                  (boot r 0.7, shaft cap r 0.28 of its radius); SLOT the
+ *                  overlay slot's bar (not interactive).
+ *   CAPTION        text: "ATARI 5200" (on the band) and "Controller N"
+ *                  (under the body), never hit.
+ *   STICK          round (the drag region, inside the dish), port n. Drag:
+ *                  a52session_stick_from_vector(dx, dy, w/2, &x, &y) from its
+ *                  centre, then a52session_stick_set(port, x, y); (0,0) on
+ *                  release. The wheel nudges the same way. In Map mode a
+ *                  click picks a52session_stick_map_target(port, dx, dy, w/2)
+ *                  (one of the port's four directions). target is -1: light
+ *                  it with a52session_stick_get.
+ *   FIRE           arg 0 left / 1 right side button; target FIRE (upper pair)
+ *                  or FIRE2 (lower pair) of port n: a52session_press(target,
+ *                  down). The two sides of a pair are one wire.
+ *   CONSOLE_KEY    START / PAUSE / RESET: target = A52_TARGET_KEY(..).
+ *   KEYCAP         the 12-key pad, target = A52_TARGET_KEY(..). The keypad is
+ *                  shared: a key held on one controller is the same key on
+ *                  all, so light the target on every controller.
+ *   NOTE           the shared-keypad line (port -1), never hit.
+ * Pressable kinds are STICK, FIRE, CONSOLE_KEY and KEYCAP. */
+typedef enum {
+    A52_CTL_CABLE = 0, A52_CTL_BODY, A52_CTL_BAND, A52_CTL_CAPTION, A52_CTL_CONSOLE_KEY,
+    A52_CTL_DISH, A52_CTL_STICK, A52_CTL_FIRE, A52_CTL_WELL, A52_CTL_KEYCAP,
+    A52_CTL_SLOT, A52_CTL_NOTE
+} a52_control_kind;
+
+typedef struct {
+    int kind;            /* a52_control_kind */
+    const char *label;   /* "FIRE", "5", "START", "Controller 2", the note's text, ... */
+    int port;            /* 0-3, or -1 (the note) */
+    int target;          /* A52_TARGET_*, or -1 (parts that are not one target) */
+    int arg;             /* FIRE: 0 left, 1 right side */
+    float x, y, w, h;    /* layout units, from the top left */
+} a52_control;
+
+#define A52_CONTROLS_MAX   120      /* 4 x 28 parts and the note */
+#define A52_BODY_BOTTOM_W  9.6f     /* the body's width at the keypad end (top: 12) */
+#define A52_SHARED_NOTE    "Keypad and the second fire button are shared by all controllers."
+/* Fills `out` (at most `max`) for `nports` controllers (a52session_active_ports)
+ * and returns the part count; *width and *height are the extent. */
+int a52session_controls_layout(int nports, a52_control *out, int max, float *width, float *height);
+/* The topmost pressable part under a point in layout units, as an index into
+ * `ctl`, or -1. STICK is a circle, the rest rectangles; the other kinds are
+ * never hit. */
+int a52session_controls_hit(const a52_control *ctl, int count, float x, float y);
+/* The stick for a pointer at (dx, dy) from the dish's centre (+x right, +y
+ * down, any unit) with `radius` the drag region's reach: x,y -127..127,
+ * proportional to the distance, full at `radius`; centred within 5% of it. */
+void a52session_stick_from_vector(float dx, float dy, float radius, int *outx, int *outy);
+/* Map mode: the port's direction target (UP/DOWN/LEFT/RIGHT) nearest to a
+ * click at (dx, dy) from the centre, or -1 within 20% of the radius. */
+int a52session_stick_map_target(int port, float dx, float dy, float radius);
+
+/* DEPRECATED, kept until the frontends move to the layout above: the keypad as
+ * the old panels drew it, the 12-key pad (3x4) and START / PAUSE / RESET, one
+ * entry per cap in cap units (1.0 = a keypad key) from the top left. `key` is
+ * a52_key (its binding target is A52_TARGET_KEY(key)). Static; valid for the
+ * process. */
 typedef enum { A52_KEYCAP_NORMAL = 0, A52_KEYCAP_FUNCTION } a52_keycap_kind;
 typedef struct {
     const char *label;
@@ -338,6 +474,12 @@ void a52session_binding_set_button(a52session *s, int target, int button,
                                     char *stolen, int stolensz);
 void a52session_bindings_reset(a52session *s);
 const char *a52_pad_button_name(int button);
+/* The window's Clear: unbinds the target's key AND its pad button. */
+void a52session_binding_clear(a52session *s, int target);
+/* F9 (the Controllers window), F11 (full screen) and F12 (the debugger) are the
+ * frontends': never bindable (binding_set_key ignores them, a saved one is
+ * dropped on load). 1 if the keysym is one of them. */
+int  a52session_key_reserved(uint32_t keysym);
 int  a52session_target_for_key(a52session *s, uint32_t keysym);
 int  a52session_target_for_button(a52session *s, int port, int button);
 void a52session_gamepad_capture_begin(a52session *s);
@@ -347,7 +489,11 @@ int  a52session_gamepad_capture_poll(a52session *s, int *button);
 /* ---- gamepads (hot-plugged) ----------------------------------------------- */
 int  a52session_gamepad_count(a52session *s);
 int  a52session_gamepad_name(a52session *s, int idx, char *dst, int dstsz);
-void a52session_gamepad_assign(a52session *s, int idx, int port); /* -1 auto */
+/* port: 0 .. a52session_active_ports() - 1 explicitly, -1 or a port the
+ * console does not have = Automatic. An explicit assignment is remembered in
+ * the "pad_assign" setting (the SDL GUID and name, see pad_assign.h): the pad
+ * gets its port back when it is plugged in again or on the next run. */
+void a52session_gamepad_assign(a52session *s, int idx, int port);
 int  a52session_gamepad_assignment(a52session *s, int idx);
 int  a52session_gamepad_effective_port(a52session *s, int idx);
 unsigned a52session_gamepad_generation(a52session *s);

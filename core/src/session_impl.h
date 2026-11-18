@@ -15,6 +15,7 @@
 
 #include "A52Host.h"
 #include "fujinet_cart.h"
+#include "input_merge.h"
 #include "session_internal.h"
 
 struct SessionImpl
@@ -54,14 +55,18 @@ struct SessionImpl
 	void AfterFrame();
 	void OnLog(const char* text);
 
-	// ---- controllers
-	std::atomic<unsigned> joy[A52_PORTS];      // frontends, keyboard bindings: 1 << a52_action
-	std::atomic<unsigned> joyPad[A52_PORTS];   // gamepads' digital directions / buttons
-	std::atomic<int> padX[A52_PORTS], padY[A52_PORTS];   // gamepad analog -128..127
-	std::atomic<int> ptrX[A52_PORTS], ptrY[A52_PORTS];   // a52session_stick_set
+	// ---- controllers (input.cpp; input_merge.h)
+	// Every source holds its own bits and the console sees their merge. All of
+	// it is under inputMtx, a leaf lock: the UI thread, the gamepad thread and
+	// the emulation thread (BeforeFrame) all touch it.
+	std::mutex inputMtx;
+	unsigned joySrc[A52_PORTS][A52_SRC_COUNT] = {};   // 1 << a52_action, per source
+	unsigned keySrc[A52_SRC_COUNT] = {};              // 1 << a52_key, per source
+	int stickX[A52_SRC_COUNT][A52_PORTS] = {};        // analog stick per source, -127..127
+	int stickY[A52_SRC_COUNT][A52_PORTS] = {};
+	uint32_t heldKeysym[A52_TARGET_COUNT] = {};       // the key that holds each target
 	// console keys: the 5200 scans ONE key at a time, the most recent still
 	// held; a key let go before a frame saw it is held a few frames (a tap)
-	std::mutex keyMtx;
 	std::vector<int> heldKeys;                 // a52_key, oldest first
 	std::atomic<unsigned> keysMask { 0 };      // 1 << a52_key, for the UI
 	std::atomic<int> keyCode { -1 };           // a52_key being held, -1 none
@@ -70,7 +75,11 @@ struct SessionImpl
 	static constexpr int KeyMinFrames = 3;
 	std::atomic<int> resetPulse { 0 };         // frames left on a52session_reset's RESET
 	std::atomic<bool> analog { true };
-	void UpdateKey();                          // keyMtx held
+	std::atomic<int> activePorts { A52_PORTS };   // 2 with the 2-port BIOS (CoreInit)
+	void UpdateKey();                          // inputMtx held
+	void RecomputeKeys();                      // inputMtx held: keySrc -> heldKeys
+	unsigned MergedJoy(int port) const;        // inputMtx held: opposed pairs cancelled
+	void MergedStick(int port, int& x, int& y) const;   // inputMtx held: strongest source
 
 	// ---- video
 	std::atomic<int> area { 1 };

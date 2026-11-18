@@ -57,6 +57,10 @@ static const a52_pref s_prefs[] = {
     P_BOOL("mz_pokey", "Audio", "Sound", "High-fidelity POKEY", NULL, 1, A52_APPLY_POWER),
 
     /* Input */
+    P_BOOL("enable_gamepad", "Input", "Controllers", "Enable gamepads",
+           "Use USB and Bluetooth gamepads; each is assigned to a controller in the "
+           "Controllers window (and in Preferences > Input where it has pad rows)",
+           1, A52_APPLY_RESTART),
     P_BOOL("analog_stick", "Input", "Controllers", "Gamepad sticks are analog",
            "The 5200's controllers are analog: off makes the left stick an eight-way switch",
            1, A52_APPLY_LIVE),
@@ -79,7 +83,6 @@ static const a52_pref s_prefs[] = {
            "dials it",
            A52_APPLY_RESTART),
     P_BOOL("enable_audio", "FujiNet", "Host", "Sound output", NULL, 1, A52_APPLY_RESTART),
-    P_BOOL("enable_gamepad", "FujiNet", "Host", "Gamepads", NULL, 1, A52_APPLY_RESTART),
 };
 
 #define N_PREFS ((int)(sizeof s_prefs / sizeof s_prefs[0]))

@@ -19,6 +19,7 @@
 
 #include "A52Host.h"
 #include "fujinet_cart.h"
+#include "bindings.h"
 #include "fujitcp_host.h"
 #include "session_impl.h"
 #include "session_internal.h"
@@ -85,6 +86,12 @@ a52session* a52session_new(const a52session_paths* paths)
 		snprintf(s->fujinet_runtime_src, sizeof s->fujinet_runtime_src, "%s",
 		         paths->fujinet_runtime_src);
 	settings_init(s);
+	// the macOS window's old "show_bindings" is the family's controllers_show_bindings
+	if (!a52session_get_str(s, "controllers_show_bindings", nullptr) &&
+	    a52session_get_str(s, "show_bindings", nullptr))
+		a52session_set_int(s, "controllers_show_bindings",
+		                   a52session_get_int(s, "show_bindings", 0) != 0);
+	bindings_init(s);   // the saved key and pad bindings, and where new ones are saved
 	s->impl = new SessionImpl(s);
 	roms_provision_embedded(s);
 	return s;
@@ -110,6 +117,7 @@ void a52session_free(a52session* s)
 	if (gImpl == im)
 		gImpl = nullptr;
 	delete im;
+	bindings_shutdown(s);   // no binding may be saved into a session that is gone
 	a52session_settings_flush(s);
 	settings_free_all(s);
 	pthread_mutex_destroy(&s->sysact_mtx);
@@ -324,6 +332,7 @@ bool SessionImpl::CoreInit(std::string& err)
 		std::lock_guard<std::mutex> lock(logMtx);
 		const int slot = prefs_bios_slot(s);
 		biosName = slot >= 0 ? a52session_rom_slot(slot)->name : "Built-in Altirra 5200 OS";
+		activePorts.store(slot == ROM_5200_2PORT ? 2 : A52_PORTS);
 	}
 	ApplyLive();
 	ColdStart(false);
@@ -349,32 +358,29 @@ void SessionImpl::BeforeFrame()
 		AKEY_5200_6, AKEY_5200_7, AKEY_5200_8, AKEY_5200_9, AKEY_5200_ASTERISK,
 		AKEY_5200_HASH, AKEY_5200_START, AKEY_5200_PAUSE, AKEY_5200_RESET};
 	unsigned fire2 = 0;
-	for (int p = 0; p < A52_PORTS; p++) {
-		const unsigned b = joy[p].load() | joyPad[p].load();
-		unsigned char stick = INPUT_STICK_CENTRE;
-		if (b & (1u << A52_ACT_UP))
-			stick &= ~1;
-		if (b & (1u << A52_ACT_DOWN))
-			stick &= ~2;
-		if (b & (1u << A52_ACT_LEFT))
-			stick &= ~4;
-		if (b & (1u << A52_ACT_RIGHT))
-			stick &= ~8;
-		a8host_stick[p] = stick;
-		a8host_trig[p] = (b & (1u << A52_ACT_FIRE)) ? 0 : 1;
-		fire2 |= b & (1u << A52_ACT_FIRE2);
-		// the analog pots: the strongest of the pad and the pointer; centred
-		// (114) hands the decision to the digital stick above
-		int x = padX[p].load(), y = padY[p].load();
-		const int px = ptrX[p].load(), py = ptrY[p].load();
-		if (std::abs(px) + std::abs(py) > std::abs(x) + std::abs(y)) {
-			x = px;
-			y = py;
+	{
+		std::lock_guard<std::mutex> lock(inputMtx);
+		for (int p = 0; p < A52_PORTS; p++) {
+			const unsigned b = MergedJoy(p);
+			unsigned char stick = INPUT_STICK_CENTRE;
+			if (b & (1u << A52_ACT_UP))
+				stick &= ~1;
+			if (b & (1u << A52_ACT_DOWN))
+				stick &= ~2;
+			if (b & (1u << A52_ACT_LEFT))
+				stick &= ~4;
+			if (b & (1u << A52_ACT_RIGHT))
+				stick &= ~8;
+			a8host_stick[p] = stick;
+			a8host_trig[p] = (b & (1u << A52_ACT_FIRE)) ? 0 : 1;
+			fire2 |= b & (1u << A52_ACT_FIRE2);
+			// the analog pots: the strongest source's deflection; centred
+			// (114) hands the decision to the digital stick above
+			int x, y;
+			MergedStick(p, x, y);
+			a8host_pot[2 * p] = (unsigned char)(114 + x * 106 / 127);
+			a8host_pot[2 * p + 1] = (unsigned char)(114 + y * 106 / 127);
 		}
-		x = std::max(-127, std::min(127, x));
-		y = std::max(-127, std::min(127, y));
-		a8host_pot[2 * p] = (unsigned char)(114 + x * 106 / 127);
-		a8host_pot[2 * p + 1] = (unsigned char)(114 + y * 106 / 127);
 	}
 
 	int key = keyCode.load();
@@ -412,16 +418,7 @@ void SessionImpl::OnLog(const char* text)
 
 SessionImpl::SessionImpl(a52session* sess) : s(sess)
 {
-	for (auto& j : joy)
-		j.store(0);
-	for (auto& j : joyPad)
-		j.store(0);
-	for (int p = 0; p < A52_PORTS; p++) {
-		padX[p].store(0);
-		padY[p].store(0);
-		ptrX[p].store(0);
-		ptrY[p].store(0);
-	}
+	activePorts.store(prefs_bios_slot(s) == ROM_5200_2PORT ? 2 : A52_PORTS);
 	A52Host::Callbacks cb;
 	cb.init = [this](std::string& err) { return CoreReinit(err); };
 	cb.applyConfig = [this] { prefs_emit_options(s, apply_option, nullptr); };
@@ -892,9 +889,17 @@ int a52session_gamepad_last_event(a52session* s, char* dst, int dstsz)
 	return n;
 }
 
-int session_active_ports(struct a52session*)
+// The controllers the console has: the 2-port BIOS (CRC c2ba2613) has two, every
+// other BIOS (the built-in Altirra OS, the 4-port 4248d3e3) four. It follows the
+// BIOS the running console loaded, so a changed setting counts from its restart.
+int a52session_active_ports(a52session* s)
 {
-	return A52_PORTS;
+	return Impl(s)->activePorts.load();
+}
+
+int session_active_ports(struct a52session* s)
+{
+	return a52session_active_ports(s);
 }
 
 #ifdef A52_GAMEPAD_STUB

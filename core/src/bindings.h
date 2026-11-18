@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 void bindings_init(struct a52session *s);
+void bindings_shutdown(struct a52session *s);
 int  session_binding_target_for_key(struct a52session *s, uint32_t keysym);
 
 #ifdef __cplusplus

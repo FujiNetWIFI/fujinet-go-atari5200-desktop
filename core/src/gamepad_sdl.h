@@ -27,6 +27,10 @@ extern "C" {
  * previous result. Pure. */
 int a52_dir_from_stick(float x, float y, int prev, float enter, float exit);
 
+/* The left stick as the CX52's analog stick: a 12% radial dead zone, the rest
+ * rescaled to 0..127 along the stick's direction (+x right, +y down). Pure. */
+void a52_stick_analog(float x, float y, int *outx, int *outy);
+
 /* Which pad drives `port`: an explicit assignment wins; among the rest,
  * connection order (first pad to port 0, second to port 1). `assign[i]` is
  * pad i's assignment (-1 = automatic). Returns the pad index or -1. Pure. */
