@@ -75,7 +75,17 @@
          it cannot disagree with the tree; past releases are literal and go
          above it as they are made. The release job checks that this first
          entry is still a template. -->
-    <release version="@PROJECT_VERSION@" date="2026-11-16">
+    <release version="@PROJECT_VERSION@" date="2026-11-18">
+      <description>
+        <p>
+          New Controllers window (F9), drawn like the real CX52: four controllers (two with the 2-port BIOS), analog stick you can drag, side fire buttons, keypad and START / PAUSE / RESET you can press, and the keypad shared by all controllers shown as such.
+        </p>
+        <p>
+          Map, Clear, Defaults and Show bindings; gamepads can be assigned to a controller in the window and the assignment is remembered; key bindings are now saved between runs; releasing a key no longer drops a direction held on a gamepad; the mouse in the picture can steer any controller.
+        </p>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-11-16">
       <description>
         <p>
           macOS: the picture is drawn with Metal in step with the display, so it is smoother on 60 and 120 Hz screens; the emulator runs with game-grade scheduling priority; and the app opts into macOS Game Mode when it is full screen.
