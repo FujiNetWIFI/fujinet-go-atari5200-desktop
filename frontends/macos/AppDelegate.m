@@ -320,9 +320,9 @@ static NSString *str(const char *s)
         _statusTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES
             block:^(NSTimer *t) { (void)t; [weakSelf updateStatus]; }];
         _statusTimer.tolerance = 0.5;
-        _fastTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 repeats:YES
+        _fastTimer = [NSTimer scheduledTimerWithTimeInterval:0.04 repeats:YES
             block:^(NSTimer *t) { (void)t; [weakSelf fastTick]; }];
-        _fastTimer.tolerance = 0.05;
+        _fastTimer.tolerance = 0.005;
         [self updateStatus];
         [self fastTick];
     } else if (!want && _fastTimer) {
@@ -386,7 +386,7 @@ static NSString *str(const char *s)
 - (void)windowDidResignKey:(NSNotification *)note
 {
     /* focus gone: nothing stays held (the Controllers panel takes typing too) */
-    if (_session && note.object == _window && ![_controllers isVisible]) {
+    if (_session && note.object == _window && ![_controllers isActive]) {
         A52ForwardReleaseAll(_session);
         [_display endDrag];
     }
@@ -642,6 +642,15 @@ static NSString *str(const char *s)
                 else if (applied == A52_APPLY_RESTART) [me say:@"Restarted with the new options"];
                 [me updateStatus];
             }];
+        /* the Input page: Open Controllers, and a gamepad's controller or Reset Controls changed */
+        _settings.openControllers = ^{
+            A52AppDelegate *me = weakSelf;
+            if (me) [me->_controllers show];
+        };
+        _settings.controlsChanged = ^{
+            A52AppDelegate *me = weakSelf;
+            if (me) [me->_controllers refresh];
+        };
     }
     [_settings show];
 }

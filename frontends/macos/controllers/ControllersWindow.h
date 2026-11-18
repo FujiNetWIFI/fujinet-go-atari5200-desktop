@@ -19,10 +19,14 @@ typedef BOOL (^A52AppKeyHandler)(NSEvent *event);
 
 @interface A52ControllersWindow : NSObject
 - (instancetype)initWithSession:(a52session *)session appKeys:(A52AppKeyHandler)appKeys;
+/* Show the panel. */
+- (void)show;
 /* Show, or hide when showing. */
 - (void)toggle;
 - (void)hide;
 - (BOOL)isVisible;
+/* The panel is the key window (it has the keyboard). */
+- (BOOL)isActive;
 /* Settings changed: gamepads and bindings are read again. */
 - (void)refresh;
 @end

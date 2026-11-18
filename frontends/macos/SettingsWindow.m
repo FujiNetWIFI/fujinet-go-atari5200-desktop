@@ -53,6 +53,11 @@ static NSString *str(const char *s)
     NSMutableArray<NSButton *> *_romRemove;
     BOOL _syncing;
     int _pending;
+    /* the Input page's gamepad block */
+    NSPopUpButton *_padList;
+    NSPopUpButton *_padPort;
+    NSTimer *_padTimer;
+    unsigned _padGeneration;
 }
 
 - (instancetype)initWithSession:(a52session *)session
@@ -291,6 +296,127 @@ static NSString *str(const char *s)
     _syncing = NO;
 }
 
+/* ---- the Input page's gamepad block ----------------------------------------------- */
+
+/* The connected gamepads, and the controller the chosen one is set to. */
+- (void)refreshPadList
+{
+    const NSInteger keep = [_padList indexOfSelectedItem];
+    const int count = a52session_gamepad_count(_session);
+    _padGeneration = a52session_gamepad_generation(_session);
+    [_padList removeAllItems];
+    for (int idx = 0; idx < count; idx++) {
+        char name[128];
+        name[0] = '\0';
+        a52session_gamepad_name(_session, idx, name, (int)sizeof name);
+        const int eff = a52session_gamepad_effective_port(_session, idx);
+        NSString *where = eff >= 0 ? [NSString stringWithFormat:@"controller %d", eff + 1] : @"no controller";
+        /* items with equal titles collapse: the index keeps them apart */
+        [[_padList menu] addItemWithTitle:[NSString stringWithFormat:@"%d: %@  [%@]", idx + 1,
+                                           strlen(name) ? str(name) : @"Gamepad", where]
+                                   action:nil keyEquivalent:@""];
+    }
+    if (count == 0) [[_padList menu] addItemWithTitle:@"No gamepads connected" action:nil keyEquivalent:@""];
+    [_padList setEnabled:count > 0];
+    [_padPort setEnabled:count > 0];
+    [_padList selectItemAtIndex:keep >= 0 && keep < count ? keep : 0];
+    [self padSelected:_padList];
+}
+
+- (void)padSelected:(id)sender
+{
+    (void)sender;
+    int assign = -1;
+    const NSInteger sel = [_padList indexOfSelectedItem];
+    if (sel >= 0 && sel < a52session_gamepad_count(_session))
+        assign = a52session_gamepad_assignment(_session, (int)sel);
+    const int nports = a52session_active_ports(_session);
+    [_padPort selectItemAtIndex:assign < 0 || assign >= nports ? 0 : assign + 1];
+}
+
+- (void)padPortChanged:(id)sender
+{
+    (void)sender;
+    const NSInteger sel = [_padList indexOfSelectedItem];
+    if (sel >= 0 && sel < a52session_gamepad_count(_session))
+        a52session_gamepad_assign(_session, (int)sel, (int)[_padPort indexOfSelectedItem] - 1);
+    [self refreshPadList];
+    if (_controlsChanged) _controlsChanged();
+}
+
+/* Reset Controls: the default keys and gamepad buttons, every gamepad back on Automatic. */
+- (void)resetControls:(id)sender
+{
+    (void)sender;
+    a52session_bindings_reset(_session);
+    for (int idx = 0; idx < a52session_gamepad_count(_session); idx++)
+        a52session_gamepad_assign(_session, idx, -1);
+    [self refreshPadList];
+    if (_controlsChanged) _controlsChanged();
+}
+
+- (void)openControllersPressed:(id)sender
+{
+    (void)sender;
+    if (_openControllers) _openControllers();
+}
+
+/* Appends the block to the Input page (after Enable gamepads and the rest of
+ * its rows): the gamepad and the controller it plays, Reset Controls and Open
+ * Controllers. Hot-plugged pads are picked up twice a second while the window
+ * is open. */
+- (void)addGamepadRowsTo:(NSScrollView *)scroll
+{
+    NSView *doc = [scroll documentView];
+    CGFloat y = NSHeight([doc frame]) - 12;
+    [doc addSubview:[self label:@"Gamepads" frame:NSMakeRect(16, y + 6, PAGE_W - 32, 20) bold:YES]];
+    y += HEAD_H;
+
+    [doc addSubview:[self label:@"Gamepad" frame:NSMakeRect(28, y + 5, LABEL_W - 12, 20) bold:NO]];
+    _padList = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(CTRL_X, y + 1, 230, 26) pullsDown:NO];
+    [_padList setTarget:self];
+    [_padList setAction:@selector(padSelected:)];
+    [doc addSubview:_padList];
+    _padPort = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(CTRL_X + 238, y + 1, 120, 26) pullsDown:NO];
+    [_padPort addItemWithTitle:@"Automatic"];
+    for (int port = 0; port < a52session_active_ports(_session); port++)
+        [_padPort addItemWithTitle:[NSString stringWithFormat:@"Controller %d", port + 1]];
+    [_padPort setTarget:self];
+    [_padPort setAction:@selector(padPortChanged:)];
+    [doc addSubview:_padPort];
+    y += ROW_H + 4;
+
+    NSButton *reset = [NSButton buttonWithTitle:@"Reset Controls" target:self action:@selector(resetControls:)];
+    [reset setFrame:NSMakeRect(CTRL_X, y, 130, 28)];
+    [doc addSubview:reset];
+    NSButton *open = [NSButton buttonWithTitle:@"Open Controllers" target:self action:@selector(openControllersPressed:)];
+    [open setFrame:NSMakeRect(CTRL_X + 138, y, 150, 28)];
+    [doc addSubview:open];
+    y += 38;
+
+    NSTextField *note = [NSTextField wrappingLabelWithString:
+        @"The controller a gamepad plays applies at once. Keys and gamepad buttons are re-mapped in the "
+        @"Controllers window (View > Controllers, Cmd+K or F9): click Map, choose a control, then press "
+        @"the key or the gamepad button. Reset Controls puts the defaults back."];
+    [note setFont:[NSFont systemFontOfSize:[NSFont smallSystemFontSize]]];
+    [note setTextColor:[NSColor secondaryLabelColor]];
+    [note setFrame:NSMakeRect(16, y, PAGE_W - 32, 64)];
+    [doc addSubview:note];
+    y += 72;
+
+    [doc setFrame:NSMakeRect(0, 0, PAGE_W, y + 12)];
+    [self refreshPadList];
+    [_padTimer invalidate];
+    __weak A52SettingsWindow *weakSelf = self;
+    _padTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *tmr) {
+        (void)tmr;
+        A52SettingsWindow *strong = weakSelf;
+        if (strong && a52session_gamepad_generation(strong->_session) != strong->_padGeneration)
+            [strong refreshPadList];
+    }];
+    [_padTimer setTolerance:0.25];
+}
+
 /* ---- building it ------------------------------------------------------------------ */
 
 /* A page's rows, as a scrolling column. */
@@ -464,6 +590,7 @@ static NSString *str(const char *s)
             NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:str(page)];
             [item setLabel:str(page)];
             [item setView:[self pageForRows:rows note:nil roms:!strcmp(page, "BIOS")]];
+            if (!strcmp(page, "Input")) [self addGamepadRowsTo:(NSScrollView *)item.view];
             [self addHelpButtonTo:item.view];
             [tabs addTabViewItem:item];
             [rows removeAllObjects];
@@ -509,6 +636,10 @@ static NSString *str(const char *s)
 {
     (void)note;
     a52session_settings_flush(_session);
+    [_padTimer invalidate];
+    _padTimer = nil;
+    _padList = nil;
+    _padPort = nil;
     const int did = _pending > A52_APPLY_LIVE ? a52session_apply_settings(_session) : 0;
     _window = nil;
     if (_onClosed) _onClosed(did);
