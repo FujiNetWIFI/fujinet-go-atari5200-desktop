@@ -147,8 +147,10 @@ so the originals can go. Preferences ▸ BIOS then offers **Built-in Altirra**,
 
 The 5200 has four controller ports. Each controller has an analog stick, two
 fire buttons (top buttons) and a keypad (0 to 9, `*` and `#`, START, PAUSE and
-RESET). The keypad and the second fire button are shared by all four
-controllers: atari800 scans one.
+RESET). With the 2-port BIOS (Preferences ▸ BIOS) the console has two
+controllers, and the app shows two. The keypad and the second fire button are
+shared by all the controllers: atari800 scans one keypad and one FIRE 2, so a
+key held on any controller is held on all of them.
 
 ## Default keys
 
@@ -167,7 +169,8 @@ Keys go by where they are on the keyboard, whatever your layout.
 | RESET | <kbd>F5</kbd> |
 
 Ports 2 to 4 have no default keys: give each a gamepad in the Controllers
-window, or map keys there.
+window, or map keys there. START, PAUSE, RESET and the keypad are common to
+every port, so they have one key each.
 
 The app keeps these keys for itself:
 
@@ -197,42 +200,88 @@ Key combinations with the Super (Windows) key are the desktop's.
 ## Gamepads
 
 Gamepads are picked up as they are plugged in, and can come and go at any
-time. The Controllers window assigns each to a controller port. The left
-stick or the D-pad is the analog stick, and the face buttons are the fire
-buttons. With **Gamepad sticks are analog** off (Preferences ▸ Input), the
-left stick is an eight-way switch.
+time; a message shows when one comes or goes. The left stick or the D-pad is
+the analog stick, and the face buttons are the fire buttons. With **Gamepad
+sticks are analog** off (Preferences ▸ Input), the left stick is an
+eight-way switch.
+
+Each pad plays one controller port. **Automatic** gives the first pad port 1,
+the next port 2, and so on; choose **Port 1** to **Port 4** to fix it, in the
+Controllers window or, where Preferences has the rows, in Preferences ▸ Input.
+A pad that is fixed to a port takes it: a pad left on *Automatic* then plays
+nothing if there is no port left for it, and so does a second pad fixed to the
+same port. With the 2-port BIOS only Port 1 and Port 2 can be chosen, and a
+choice past them falls back to *Automatic*.
+
+A choice is remembered between runs (setting `pad_assign`), by the pad's id
+and name, so a pad that is unplugged and plugged in again gets its port back.
+Unplugging a pad lets go of everything it held. A gamepad's other buttons can
+be given the keypad, START, PAUSE, RESET and fire in the Controllers window.
 
 ## The mouse
 
-Dragging with the mouse in the picture moves the analog stick of the port
-chosen in the Controllers window.
+Dragging with the mouse in the picture moves the analog stick of one
+controller: the one chosen by **Mouse in the picture drives** in the
+Controllers window (setting `mouse_port`, Controller 1 to 4). Let go and the
+stick centres. A drag never cancels a gamepad or a key that holds the same
+stick: the strongest deflection wins.
 
 ## Changing the controls
 
 The controls are changed in the Controllers window (<kbd>F9</kbd>): click
-**Map**, then click a stick direction, a fire button or a keypad key, then
-press the key or the gamepad button to give it. The control's old key or
-button is taken from it. **Defaults** puts every control back. The map is kept
-in the settings, and only what differs from the defaults is written.
+**Map**, then click a control in the picture (a stick, a fire button, a
+keypad key or START, PAUSE, RESET), then press the key or the gamepad button
+to give it. There are 42 controls in all: the four ports' stick directions,
+FIRE and FIRE 2 (24), the twelve keypad keys and START, PAUSE and RESET (15),
+and the system actions Power cycle, Pause (stop in the Debugger) and Warp
+(3). The **list** next to the buttons names every one of them.
+
+- **Clear** takes the picked control's key and gamepad button away.
+- **Defaults** puts every control back.
+- **Show bindings** writes the key bound to each control on it.
+- <kbd>Escape</kbd> backs out of a pick; <kbd>F9</kbd>, <kbd>F11</kbd>,
+  <kbd>F12</kbd> and keys with <kbd>Ctrl</kbd> cannot be given to a control.
+
+A key does one thing, so a key given to a new control is taken from the old
+one, and the window says so. The keypad, START, PAUSE, RESET and FIRE 2 are
+common to all the controllers, so a key or button given to one is that
+control on every port. The map is kept in the settings, and only what differs
+from the defaults is written.
 
 <!-- context: controllers -->
 # Controllers window
 
-The Controllers window (<kbd>F9</kbd>) draws the four controllers with their
-sticks, fire buttons and keypads, the gamepads and the port each is on, and
-Map mode. It floats on its own at a fixed size. Whatever the console sees
-held lights up in the accent colour, whoever holds it: the keyboard, a gamepad
-or the mouse, so the window is also an input tester for a new gamepad.
+The Controllers window (<kbd>F9</kbd>) draws the Atari 5200's controllers like
+the real thing: the CX52 with its stick in a dish, the red fire buttons on
+both sides, START, PAUSE and RESET, and the twelve-key pad. There are four,
+side by side, or two with the 2-port BIOS. It floats on its own at a fixed
+size, hidden until you ask for it. A note under the controllers says that the
+keypad and the second fire button are shared by all of them: a key held on one
+is held on all.
+
+Whatever the console sees held lights up in orange, whoever holds it: the
+keyboard, a gamepad or the mouse, so the window is also an input tester for a
+new gamepad.
 
 | With the mouse | Does |
 |---|---|
-| Press a keypad key | Holds it for as long as the button is down |
-| Press a fire button | Holds it |
-| Drag a stick | Moves it |
+| Press a key (keypad, START...) | Holds it for as long as the button is down |
+| Press a fire button | Holds it (the upper pair is FIRE, the lower pair FIRE 2) |
+| Drag a stick | Moves it towards the pointer; let go to centre |
+| Scroll over a stick | Nudges it |
 
 Switching to another window lets go of everything the mouse holds. Keys typed
-in the Controllers window go to the console. **Map** and **Defaults** change
-the controls (see [Changing the controls](#changing-the-controls)).
+in the Controllers window go to the console, except while **Map** waits for a
+key.
+
+Under the picture are a row for each gamepad plugged in (*Automatic* or
+*Port 1* to *Port 4*, see [Gamepads](#gamepads)), **Mouse in the picture
+drives** (see [The mouse](#the-mouse)), and the **Map**, **Clear**,
+**Defaults** and **Show bindings** buttons with the list of all the controls
+(see [Changing the controls](#changing-the-controls)). The **Show bindings**
+check box is remembered (setting `controllers_show_bindings`). A **Help**
+button opens this topic. The window can also be opened at start with the
+environment variable `A52_OPEN_CONTROLLERS` set.
 
 # FujiNet
 
@@ -345,13 +394,40 @@ The sound. The volume applies at once; the POKEY option with a power cycle.
 <!-- context: prefs/Input -->
 ## Input settings
 
-How a gamepad drives the controllers. Applies at once.
+How a gamepad drives the controllers. Applies at once, except Enable
+gamepads, which restarts the session.
 
 
 ### Controllers
 
+- **Enable gamepads**: pick up USB and Bluetooth gamepads at all; each is
+  assigned to a controller in the Controllers window (setting `enable_gamepad`)
 - **Gamepad sticks are analog**: the 5200's controllers are analog; off makes a gamepad's left stick an eight-way switch (setting `analog_stick`)
 - **Autofire**: *Off*, *While fire is held* or *Always* (setting `autofire`)
+
+### Gamepad ports
+
+<!-- only: gnome kde macos -->
+
+A row for each gamepad plugged in, with the port it plays: *Automatic* or
+*Port 1* to *Port 4*, applied at once (see [Gamepads](#gamepads)). The rows
+follow gamepads plugged in and out while Preferences is open.
+
+<!-- end -->
+
+<!-- only: windows -->
+
+Settings has no per-pad rows: assign each gamepad a port in the Controllers
+window (see [Gamepads](#gamepads)).
+
+<!-- end -->
+
+### Controls buttons
+
+- **Reset Controls**: puts the default keys and gamepad buttons back, and every
+  gamepad on *Automatic*.
+- **Open Controllers**: opens the Controllers window (see
+  [Controllers window](#controllers-window)).
 
 <!-- context: prefs/BIOS -->
 ## BIOS settings
@@ -366,7 +442,8 @@ Which console BIOS runs. Applies with a power cycle.
 <!-- context: prefs/FujiNet -->
 ## FujiNet settings
 
-FujiNet and the host's audio and gamepads. These restart the session.
+FujiNet and the host's audio. These restart the session. (Gamepads are on the
+Input page.)
 
 
 ### The built-in FujiNet
@@ -381,12 +458,16 @@ FujiNet and the host's audio and gamepads. These restart the session.
 ### Host
 
 - **Sound output**: opens the system audio device (setting `enable_audio`)
-- **Gamepads**: polls USB and Bluetooth gamepads (setting `enable_gamepad`)
 
 ## The settings file
 
 The settings file is `settings.ini` (see [Files and folders](#files-and-folders)).
 Each setting above names its key.
+
+The Controllers window keeps its own settings here too: `bindings` (the keys
+and gamepad buttons that differ from the defaults), `pad_assign` (the port each
+gamepad was given, by its id and name), `mouse_port` (the controller the mouse
+drives), and `controllers_show_bindings` (the check box under the picture).
 
 # Debugger
 

@@ -47,7 +47,8 @@ published build (`COMPLIANCE.md`).
 
 ### Keys
 
-Defaults; the Controllers window remaps them.
+Defaults; the Controllers window remaps them (42 controls in all; F9, F11, F12
+and Ctrl chords cannot be bound).
 
 | Key | |
 |---|---|
@@ -61,11 +62,24 @@ Defaults; the Controllers window remaps them.
 | F9 / F11 / F12 | Controllers / Fullscreen / Debugger |
 | Ctrl+Shift+O, W, Q (Cmd on a Mac) | Open, Warp, Quit |
 
-The 5200 has four controller ports. Ports 2–4 have no default keys: assign a
-gamepad to each in the Controllers window (gamepads are picked up as they are
-plugged in and out; the left stick or d-pad is the analog stick, the face
-buttons the fire buttons), or map keys there. Dragging with the mouse in the
-display moves the analog stick of the selected port.
+The 5200 has four controller ports (two with the 2-port BIOS). Ports 2–4 have
+no default keys: assign a gamepad to each in the Controllers window (gamepads
+are picked up as they are plugged in and out; the left stick or d-pad is the
+analog stick, the face buttons the fire buttons; Automatic or Port 1 to 4, and
+the choice is remembered), or map keys there. Dragging with the mouse in the
+display moves the analog stick of the controller chosen in the Controllers
+window.
+
+### Controllers window (F9)
+
+Four CX52 controllers drawn like the real ones (two with the 2-port BIOS): drag
+a stick, press the fire buttons, the keypad, START, PAUSE and RESET. The keypad
+and FIRE 2 are shared by all controllers (atari800 scans one), so a key held on
+one is held on all. Held controls light up in orange, whoever holds them, so it
+doubles as a gamepad tester. **Map**, **Clear**, **Defaults** and **Show
+bindings** change the 42 controls. Preferences ▸ Input has Enable gamepads, the
+analog stick, the gamepad rows (not on Windows), **Reset Controls** and **Open
+Controllers**. `A52_OPEN_CONTROLLERS=1` opens the window at start.
 
 ### Help
 
