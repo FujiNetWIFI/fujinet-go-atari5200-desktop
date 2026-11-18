@@ -292,7 +292,7 @@ static void on_active_changed(GObject *win, GParamSpec *ps, gpointer user_data)
 {
     A52Window *self = user_data;
     (void)ps;
-    if (!gtk_window_is_active(GTK_WINDOW(win)) && !a52_controllers_visible())
+    if (!gtk_window_is_active(GTK_WINDOW(win)) && !a52_controllers_active())
         a52session_release_all(self->session);
 }
 
@@ -805,6 +805,15 @@ void a52_window_set_stick_port(A52Window *self, int port)
     a52_display_set_stick_port(A52_DISPLAY(self->display), port);
 }
 
+/* The controller a mouse drag in the picture steers: the "mouse_port" setting
+ * (the Controllers window's dropdown), kept inside the console's ports. */
+static void apply_mouse_port(A52Window *self)
+{
+    int ports = a52session_active_ports(self->session);
+    int port = a52session_get_int(self->session, "mouse_port", 0);
+    a52_display_set_stick_port(A52_DISPLAY(self->display), CLAMP(port, 0, ports - 1));
+}
+
 void a52_window_apply_view(A52Window *self)
 {
     int i = a52session_pref_find("aspect");
@@ -819,6 +828,7 @@ void a52_window_apply_view(A52Window *self)
 void a52_window_settings_changed(A52Window *self)
 {
     a52_window_apply_view(self);
+    apply_mouse_port(self);
     a52_controllers_refresh();
     rebuild_menu(self, TRUE);
     update_status(self);
@@ -1156,6 +1166,7 @@ GtkWidget *a52_window_new(AdwApplication *app, a52session *session)
 
     self->display = a52_display_new(session);
     a52_window_apply_view(self);
+    apply_mouse_port(self);
     {
         GtkDropTarget *drop = gtk_drop_target_new(G_TYPE_FILE, GDK_ACTION_COPY);
         g_signal_connect(drop, "drop", G_CALLBACK(on_drop), self);
@@ -1182,7 +1193,7 @@ GtkWidget *a52_window_new(AdwApplication *app, a52session *session)
     self->fujinet_generation = a52session_fujinet_generation(session);
     rebuild_menu(self, TRUE);
     self->status_id = g_timeout_add_seconds(1, status_tick, self);
-    self->fast_id = g_timeout_add(100, fast_tick, self);
+    self->fast_id = g_timeout_add(40, fast_tick, self);
     update_status(self);
 
     /* A52_OPEN_CONTROLLERS / _DEBUGGER / _SETTINGS open those windows at

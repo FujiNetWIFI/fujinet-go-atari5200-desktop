@@ -26,6 +26,7 @@
 
 #define MAX_ROWS 128
 #define MAX_ROM_ROWS 64
+#define MAX_PADS 8
 
 typedef struct {
     A52Window *window;
@@ -36,6 +37,12 @@ typedef struct {
     GtkWidget *rom_rows[MAX_ROM_ROWS];
     GtkWidget *rom_remove[MAX_ROM_ROWS];
     gboolean syncing;
+    /* the Input page's gamepad rows */
+    AdwPreferencesGroup *pad_group;
+    GtkWidget *pad_rows[MAX_PADS];
+    int pad_row_count;
+    unsigned pad_generation;
+    guint pad_timer;
     int pending;                        /* the heaviest change not applied yet */
 } PrefsState;
 
@@ -420,6 +427,150 @@ static void add_bios_groups(PrefsState *st, AdwPreferencesPage *page)
     adw_preferences_page_add(page, group);
 }
 
+/* ---- the Input page's gamepads and controls ----------------------------------------- */
+
+static void on_pad_assign(GObject *row, GParamSpec *ps, gpointer ud)
+{
+    PrefsState *st = ud;
+    int idx = GPOINTER_TO_INT(g_object_get_data(row, "a52-pad"));
+    int sel = (int)adw_combo_row_get_selected(ADW_COMBO_ROW(row));
+    (void)ps;
+    if (st->syncing)
+        return;
+    /* 0 = automatic (connection order), 1..N = that controller */
+    a52session_gamepad_assign(st->session, idx, sel - 1);
+}
+
+/* One row per pad, with the controller it is set to and the one it plays. */
+static void rebuild_pad_rows(PrefsState *st)
+{
+    int n = a52session_gamepad_count(st->session);
+    int ports = a52session_active_ports(st->session);
+    char name[128], sub[64];
+
+    st->syncing = TRUE;
+    for (int i = 0; i < st->pad_row_count; i++)
+        adw_preferences_group_remove(st->pad_group, st->pad_rows[i]);
+    st->pad_row_count = 0;
+    if (n == 0) {
+        GtkWidget *row = adw_action_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), "No gamepads connected");
+        adw_action_row_set_subtitle(ADW_ACTION_ROW(row),
+                                    "Plug one in: it is picked up as it appears");
+        adw_preferences_group_add(st->pad_group, row);
+        st->pad_rows[st->pad_row_count++] = row;
+        st->syncing = FALSE;
+        return;
+    }
+    for (int i = 0; i < n && i < MAX_PADS; i++) {
+        GtkWidget *row = adw_combo_row_new();
+        GtkStringList *model = gtk_string_list_new(NULL);
+        int eff = a52session_gamepad_effective_port(st->session, i);
+        int assign = a52session_gamepad_assignment(st->session, i);
+        gtk_string_list_append(model, "Automatic");
+        for (int k = 0; k < ports; k++) {
+            char c[24];
+            g_snprintf(c, sizeof c, "Controller %d", k + 1);
+            gtk_string_list_append(model, c);
+        }
+        a52session_gamepad_name(st->session, i, name, sizeof name);
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), name);
+        if (eff >= 0)
+            g_snprintf(sub, sizeof sub, "Plays controller %d", eff + 1);
+        else
+            g_snprintf(sub, sizeof sub, "Plays nothing");
+        adw_action_row_set_subtitle(ADW_ACTION_ROW(row), sub);
+        adw_combo_row_set_model(ADW_COMBO_ROW(row), G_LIST_MODEL(model));
+        adw_combo_row_set_selected(ADW_COMBO_ROW(row),
+                                   assign < 0 || assign >= ports ? 0 : (guint)assign + 1);
+        g_object_set_data(G_OBJECT(row), "a52-pad", GINT_TO_POINTER(i));
+        g_signal_connect(row, "notify::selected", G_CALLBACK(on_pad_assign), st);
+        adw_preferences_group_add(st->pad_group, row);
+        st->pad_rows[st->pad_row_count++] = row;
+        g_object_unref(model);
+    }
+    st->syncing = FALSE;
+}
+
+static gboolean pad_tick(gpointer ud)
+{
+    PrefsState *st = ud;
+    unsigned gen = a52session_gamepad_generation(st->session);
+    if (gen != st->pad_generation) {
+        st->pad_generation = gen;
+        rebuild_pad_rows(st);
+    }
+    return G_SOURCE_CONTINUE;
+}
+
+static void on_open_controllers(GtkButton *b, gpointer ud)
+{
+    PrefsState *st = ud;
+    (void)b;
+    a52_controllers_show(GTK_WINDOW(st->window), st->session);
+}
+
+/* Every key and gamepad button back to its default, and every gamepad back to
+ * automatic assignment. */
+static void on_reset_controls(GtkButton *b, gpointer ud)
+{
+    PrefsState *st = ud;
+    (void)b;
+    a52session_bindings_reset(st->session);
+    for (int i = 0; i < a52session_gamepad_count(st->session); i++)
+        a52session_gamepad_assign(st->session, i, -1);
+    rebuild_pad_rows(st);
+    a52_controllers_refresh();
+    adw_preferences_dialog_add_toast(ADW_PREFERENCES_DIALOG(st->dialog),
+        adw_toast_new("Controls back to their defaults; gamepads on automatic"));
+}
+
+/* A row with a title, a line under it and a button. */
+static GtkWidget *button_row(const char *title, const char *subtitle, const char *label,
+                             GCallback cb, gpointer data)
+{
+    GtkWidget *row = adw_action_row_new();
+    GtkWidget *b = gtk_button_new_with_label(label);
+    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), title);
+    adw_action_row_set_subtitle(ADW_ACTION_ROW(row), subtitle);
+    gtk_widget_set_valign(b, GTK_ALIGN_CENTER);
+    g_signal_connect(b, "clicked", cb, data);
+    adw_action_row_add_suffix(ADW_ACTION_ROW(row), b);
+    return row;
+}
+
+/* The Input page's own groups (the table-driven rows come from the core): the
+ * gamepads with their controller assignments, and the controls (the
+ * Controllers window and Reset Controls). */
+static void add_input_extras(PrefsState *st, AdwPreferencesPage *page)
+{
+    AdwPreferencesGroup *pads = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
+    AdwPreferencesGroup *controls = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
+
+    adw_preferences_group_set_title(pads, "Gamepads");
+    adw_preferences_group_set_description(pads,
+        "Assigned to controllers in connection order unless chosen here, and remembered. "
+        "Enable gamepads is read when the session starts, so changing it restarts "
+        "the session when Preferences closes.");
+    st->pad_group = pads;
+    rebuild_pad_rows(st);
+    st->pad_generation = a52session_gamepad_generation(st->session);
+    st->pad_timer = g_timeout_add(1000, pad_tick, st);
+
+    adw_preferences_group_set_title(controls, "Controls");
+    adw_preferences_group_set_description(controls,
+        "Keys and gamepad buttons are re-mapped in the Controllers window (F9): press "
+        "Map, choose a control, then press the key or gamepad button to give it.");
+    adw_preferences_group_add(controls,
+        button_row("Controllers window", "The controllers, the keypad and console keys, and Map",
+                   "Open Controllers", G_CALLBACK(on_open_controllers), st));
+    adw_preferences_group_add(controls,
+        button_row("Reset Controls", "Put every key and gamepad button back to its default",
+                   "Reset Controls", G_CALLBACK(on_reset_controls), st));
+    adw_preferences_page_add(page, pads);
+    adw_preferences_page_add(page, controls);
+}
+
 /* ---- the dialog --------------------------------------------------------------------- */
 
 static void on_closed(AdwDialog *dlg, gpointer ud)
@@ -427,6 +578,8 @@ static void on_closed(AdwDialog *dlg, gpointer ud)
     PrefsState *st = ud;
     int did;
     (void)dlg;
+    if (st->pad_timer)
+        g_source_remove(st->pad_timer);
     a52session_settings_flush(st->session);
     did = st->pending > A52_APPLY_LIVE ? a52session_apply_settings(st->session) : 0;
     a52_window_settings_changed(st->window);
@@ -445,6 +598,7 @@ void a52_prefs_show(A52Window *parent, a52session *session)
     AdwPreferencesDialog *dlg = ADW_PREFERENCES_DIALOG(adw_preferences_dialog_new());
     AdwPreferencesPage *page = NULL;
     AdwPreferencesGroup *group = NULL;
+    AdwPreferencesPage *input_page = NULL;
     const char *last_page = NULL, *last_group = NULL;
 
     st->window = parent;
@@ -461,6 +615,8 @@ void a52_prefs_show(A52Window *parent, a52session *session)
             adw_preferences_page_set_name(page, p->page);
             adw_preferences_page_set_icon_name(page, page_icon(p->page));
             adw_preferences_dialog_add(dlg, page);
+            if (!strcmp(p->page, "Input"))
+                input_page = page;
             last_page = p->page;
             last_group = NULL;
         }
@@ -486,6 +642,8 @@ void a52_prefs_show(A52Window *parent, a52session *session)
             (i + 1 >= a52session_pref_count() || strcmp(a52session_pref(i + 1)->page, "BIOS") != 0))
             add_bios_groups(st, page);
     }
+    if (input_page)
+        add_input_extras(st, input_page);
     refresh_rows(st);
     /* A52_SETTINGS_PAGE=BIOS opens on that page (screenshots) */
     if (g_getenv("A52_SETTINGS_PAGE") && *g_getenv("A52_SETTINGS_PAGE"))
