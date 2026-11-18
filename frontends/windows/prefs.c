@@ -18,6 +18,8 @@
 
 #include "prefs.h"
 #include "import.h"
+#include "controllers/controllers_window.h"
+#include "resource.h"
 #include "help/help_window.h"
 #include "win_common.h"
 
@@ -319,6 +321,14 @@ static LRESULT CALLBACK prefs_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (id == ID_ROM_IMPORT) { import_rom((HWND)lp); return 0; }
         if (id == ID_ROM_REMOVE) { remove_rom(); return 0; }
         if (id == ID_ROM_ALL) { import_bios_at((HWND)lp, -1); return 0; }
+        if (id == IDC_SET_RESET_CTRL) {
+            a52session_bindings_reset(g_s);
+            a52_controllers_window_refresh();
+            a52_message(g_win, "Every key and gamepad button is back to its default.", "Reset Controls",
+                        MB_ICONINFORMATION | MB_OK);
+            return 0;
+        }
+        if (id == IDC_SET_OPEN_CTRL) { a52_controllers_window_show(GetWindow(g_win, GW_OWNER), g_s); return 0; }
         if (id < ID_ROW || g_syncing) return 0;
         i = (id - ID_ROW) / 4;
         part = (id - ID_ROW) % 4;
@@ -478,6 +488,15 @@ static void build_roms_block(HWND page, int y)
 
 /* A row's note under it: every kind with a help text but the integer rows,
  * whose note sits beside them. */
+/* Under the Input rows: Reset Controls (every key and pad button back to its
+ * default) and Open Controllers (the per-pad choice lives there). */
+static void build_input_extras(HWND page, int y)
+{
+    child(page, 0, "BUTTON", "Reset Controls", BS_PUSHBUTTON | WS_TABSTOP, 24, y, 130, 28, IDC_SET_RESET_CTRL, g_font);
+    child(page, 0, "BUTTON", "Open Controllers", BS_PUSHBUTTON | WS_TABSTOP, 164, y, 140, 28, IDC_SET_OPEN_CTRL,
+          g_font);
+}
+
 static int note_below(const a52_pref *p)
 {
     return p->help && p->type != A52_PREF_INT;
@@ -528,7 +547,7 @@ void a52_prefs_show(HWND parent, a52session *session, void (*on_live)(void),
             page++;
             last_page = p->page;
             last_group = NULL;
-            heights[page] = 12 + (!strcmp(p->page, "BIOS") ? ROM_BLOCK_H : 0);
+            heights[page] = 12 + (!strcmp(p->page, "BIOS") ? ROM_BLOCK_H : 0) + (!strcmp(p->page, "Input") ? 44 : 0);
         }
         if (!last_group || strcmp(last_group, p->group)) {
             heights[page] += HEAD_H + 4;
@@ -562,6 +581,8 @@ void a52_prefs_show(HWND parent, a52session *session, void (*on_live)(void),
         Row *r = &g_rows[i];
         const int id = ID_ROW + i * 4;
         if (!last_page || strcmp(last_page, p->page)) {
+            if (last_page && !strcmp(last_page, "Input"))
+                build_input_extras(g_pages[g_page_count - 1], y + 8);
             if (bios_page && bios_y >= 0 && !g_rom_list)
                 build_roms_block(bios_page, bios_y);
             tab.pszText = (char *)p->page;

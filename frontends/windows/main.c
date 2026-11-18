@@ -72,7 +72,7 @@ static HBRUSH g_accent_brush;
 static char g_shot_path[MAX_PATH];
 static LONG g_shot_frames = 300, g_quit_frames;
 /* the display drag that drives controller 1's analog stick */
-static int g_drag, g_drag_x, g_drag_y;
+static int g_drag, g_drag_x, g_drag_y, g_drag_port;
 
 static void update_status(void);
 static void sync_menu_checks(void);
@@ -388,7 +388,7 @@ static void build_menu(HWND hwnd)
     AppendMenuA(console, MF_SEPARATOR, 0, NULL);
     AppendMenuA(console, MF_STRING, IDM_EXIT, "E&xit\tCtrl+Shift+Q");
 
-    AppendMenuA(view, MF_STRING, IDM_CONTROLLERS, "&Controllers\tF9");
+    AppendMenuA(view, MF_STRING, IDM_CONTROLLERS, "&Controllers (F9)");
     AppendMenuA(view, MF_STRING, IDM_DEBUGGER, "&Debugger\tF12");
     AppendMenuA(view, MF_SEPARATOR, 0, NULL);
     AppendMenuA(view, MF_STRING, IDM_TV_ASPECT, "&TV Aspect");
@@ -477,7 +477,7 @@ static void show_help(void)
         "  F6                      this help\n"
         "  F9 / F11 / F12          Controllers / Fullscreen / Debugger\n"
         "  Ctrl+Shift+O / W / Q    Open / Warp / Quit\n\n"
-        "Dragging with the mouse in the picture moves controller 1's analog stick.\n"
+        "Dragging with the mouse in the picture moves a controller's analog stick\n(Controllers window: which one).\n"
         "Ports 2-4: assign a gamepad to each in the Controllers window.",
         "Help", MB_ICONINFORMATION | MB_OK);
 }
@@ -498,9 +498,19 @@ static void show_about(void)
 
 /* ---- the picture as a pointer pad -------------------------------------------------------- */
 
-/* A drag inside the picture moves controller 1's analog stick: the offset
- * from where the button went down, full deflection at a quarter of the
- * picture's size. */
+/* A drag inside the picture moves the analog stick of the controller the
+ * Controllers window's mouse row names ("mouse_port", controller 1 by
+ * default): the offset from where the button went down, full deflection at a
+ * quarter of the picture's size. */
+static int mouse_stick_port(void)
+{
+    int port = a52session_get_int(g_session, "mouse_port", 0);
+    const int ports = a52session_active_ports(g_session);
+    if (port < 0) port = 0;
+    if (port >= ports) port = ports - 1;
+    return port;
+}
+
 static void drag_stick(int x, int y)
 {
     RECT c;
@@ -510,15 +520,15 @@ static void drag_stick(int x, int y)
     if (span < 8) span = 8;
     dx = (x - g_drag_x) * 127 / span;
     dy = (y - g_drag_y) * 127 / span;
-    a52session_stick_set(g_session, 0, dx < -128 ? -128 : dx > 127 ? 127 : dx,
-                         dy < -128 ? -128 : dy > 127 ? 127 : dy);
+    a52session_stick_set(g_session, g_drag_port, dx < -127 ? -127 : dx > 127 ? 127 : dx,
+                         dy < -127 ? -127 : dy > 127 ? 127 : dy);
 }
 
 static void drag_end(void)
 {
     if (!g_drag) return;
     g_drag = 0;
-    a52session_stick_set(g_session, 0, 0, 0);
+    a52session_stick_set(g_session, g_drag_port, 0, 0);
     if (GetCapture() == g_hwnd) ReleaseCapture();
 }
 
@@ -613,6 +623,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         MapWindowPoints(NULL, hwnd, (POINT *)&dr, 2);
         if (PtInRect(&dr, p)) {
             g_drag = 1;
+            g_drag_port = mouse_stick_port();
             g_drag_x = p.x;
             g_drag_y = p.y;
             SetCapture(hwnd);
@@ -927,7 +938,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
     g_pad_generation = a52session_gamepad_generation(g_session);
     g_fuji_generation = a52session_fujinet_generation(g_session);
     SetTimer(g_hwnd, IDT_STATUS, 1000, NULL);
-    SetTimer(g_hwnd, IDT_SYSACT, 100, NULL);
+    SetTimer(g_hwnd, IDT_SYSACT, 50, NULL);
     if (g_shot_path[0] || g_quit_frames) SetTimer(g_hwnd, IDT_ENV, 100, NULL);
     update_status();
 

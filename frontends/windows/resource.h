@@ -36,6 +36,18 @@
 #define IDC_LOG_EDIT       2004
 #define IDC_LOG_HELP       2005
 
+/* The Controllers window's buttons (owner-drawn: these are hit ids, not child windows) */
+#define IDC_CTRL_MAP       2100
+#define IDC_CTRL_CLEAR     2101
+#define IDC_CTRL_DEFAULTS  2102
+#define IDC_CTRL_SHOW      2103
+#define IDC_CTRL_HELP      2104
+#define IDC_CTRL_PAD_ROW0  2110     /* + gamepad row: its Automatic / 1..N choice */
+#define IDC_CTRL_MOUSE     2120     /* the mouse-port choice */
+/* Preferences > Input */
+#define IDC_SET_RESET_CTRL 2130
+#define IDC_SET_OPEN_CTRL  2131
+
 /* Timers */
 #define IDT_LOG_REFRESH    1
 #define IDT_STATUS         2
