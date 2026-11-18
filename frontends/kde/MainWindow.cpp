@@ -81,7 +81,7 @@ MainWindow::MainWindow(a52session *session, QWidget *parent)
     connect(&m_statusTimer, &QTimer::timeout, this, &MainWindow::updateStatus);
     m_statusTimer.start(1000);
     connect(&m_fastTimer, &QTimer::timeout, this, &MainWindow::fastTick);
-    m_fastTimer.start(100);
+    m_fastTimer.start(40);      /* system actions and pad changes land within 50 ms */
     /* the current pads and FujiNet state are the baseline: no messages */
     m_padGeneration = a52session_gamepad_generation(session);
     m_fujinetGeneration = a52session_fujinet_generation(session);
@@ -162,7 +162,7 @@ void MainWindow::buildMenus()
     });
 
     QMenu *view = menuBar()->addMenu(QStringLiteral("&View"));
-    appShortcut(this, view->addAction(QStringLiteral("C&ontrollers"), this,
+    appShortcut(this, view->addAction(QStringLiteral("C&ontrollers (F9)"), this,
                                       [this] { a52ControllersToggle(this, m_session); }),
                 QKeySequence(Qt::Key_F9));
     appShortcut(this, view->addAction(QStringLiteral("&Debugger"), this,
@@ -331,13 +331,17 @@ void MainWindow::runSysaction(int sa)
 
 void MainWindow::showSettings()
 {
-    const int did = SettingsDialog::run(this, m_session, [this] { applyView(); });
+    bool openControllers = false;
+    const int did = SettingsDialog::run(this, m_session, [this] { applyView(); }, &openControllers);
+    a52ControllersRefresh();
     applyView();
     if (did == A52_APPLY_POWER)
         toast(QStringLiteral("Power cycled with the new configuration"));
     else if (did == A52_APPLY_RESTART)
         toast(QStringLiteral("Restarted with the new options"));
     updateStatus();
+    if (openControllers)
+        a52ControllersShow(this, m_session);
 }
 
 void MainWindow::showNotice(const QString &text)
@@ -471,7 +475,7 @@ void MainWindow::keyReleaseEvent(QKeyEvent *e)
 /* Focus gone: nothing stays held. */
 void MainWindow::changeEvent(QEvent *e)
 {
-    if (e->type() == QEvent::ActivationChange && !isActiveWindow() && !a52ControllersVisible())
+    if (e->type() == QEvent::ActivationChange && !isActiveWindow() && !a52ControllersActive())
         a52session_release_all(m_session);
     QMainWindow::changeEvent(e);
 }

@@ -14,8 +14,10 @@
 namespace SettingsDialog {
 /* Runs the dialog. Live rows apply at once (onLive runs after each, for the
  * view); machine and host rows apply together when it closes. Returns the
- * a52_apply that closing needed. */
-int run(QWidget *parent, a52session *session, const std::function<void()> &onLive);
+ * a52_apply that closing needed. *openControllers is set when the user chose
+ * Open Controllers (the dialog then closes). */
+int run(QWidget *parent, a52session *session, const std::function<void()> &onLive,
+        bool *openControllers = nullptr);
 /* Import BIOS: mode 0 files, 1 a ZIP, 2 a folder; says what came of it. */
 void importBios(QWidget *parent, a52session *session, int mode);
 }

@@ -34,8 +34,10 @@
 #include <QShortcut>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <memory>
 #include <vector>
 
 namespace {
@@ -297,9 +299,114 @@ void biosSlots(State &st, QVBoxLayout *v)
     }
 }
 
+/* The Input page's extras (the table gives it the switches): a row per gamepad
+ * with the controller it plays, and the way into the Controllers window. */
+void inputExtras(State &st, QVBoxLayout *pageLayout, bool *openControllers)
+{
+    a52session *session = st.session;
+    QDialog *dlg = static_cast<QDialog *>(st.dialog);
+
+    auto *pads = new QGroupBox(QStringLiteral("Gamepads"));
+    auto *padsBox = new QVBoxLayout(pads);
+    auto *padArea = new QWidget;
+    auto *padRows = new QVBoxLayout(padArea);
+    padRows->setContentsMargins(0, 0, 0, 0);
+    padsBox->addWidget(padArea);
+    pageLayout->addWidget(pads);
+
+    /* rebuilt when a pad comes or goes (or the port count changes) */
+    auto seenGen = std::make_shared<unsigned>(a52session_gamepad_generation(session) + 1);
+    auto seenPorts = std::make_shared<int>(0);
+    auto rebuild = [session, padArea, padRows, seenGen, seenPorts] {
+        const unsigned gen = a52session_gamepad_generation(session);
+        const int ports = a52session_active_ports(session);
+        if (gen == *seenGen && ports == *seenPorts)
+            return;
+        *seenGen = gen;
+        *seenPorts = ports;
+        while (QLayoutItem *item = padRows->takeAt(0)) {
+            delete item->widget();
+            delete item;
+        }
+        const int count = a52session_gamepad_count(session);
+        if (count == 0) {
+            auto *none = new QLabel(QStringLiteral("No gamepads connected - plug one in, it is picked up as it appears"));
+            none->setStyleSheet(QStringLiteral("color: gray;"));
+            none->setWordWrap(true);
+            padRows->addWidget(none);
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            char name[128];
+            a52session_gamepad_name(session, i, name, sizeof name);
+            auto *row = new QWidget;
+            auto *line = new QHBoxLayout(row);
+            line->setContentsMargins(0, 0, 0, 0);
+            auto *label = new QLabel(QString::fromUtf8(name));
+            label->setToolTip(QString::fromUtf8(name));
+            label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+            auto *eff = new QLabel;
+            eff->setStyleSheet(QStringLiteral("color: gray;"));
+            auto showEff = [session, i, eff] {
+                const int port = a52session_gamepad_effective_port(session, i);
+                eff->setText(port >= 0 ? QStringLiteral("plays Controller %1").arg(port + 1)
+                                       : QStringLiteral("plays no controller"));
+            };
+            auto *box = new QComboBox;
+            box->addItem(QStringLiteral("Automatic"));
+            for (int port = 0; port < ports; port++)
+                box->addItem(QStringLiteral("Controller %1").arg(port + 1));
+            const int assign = a52session_gamepad_assignment(session, i);
+            box->setCurrentIndex(assign < 0 || assign >= ports ? 0 : assign + 1);
+            QObject::connect(box, &QComboBox::currentIndexChanged, box, [session, i, showEff](int sel) {
+                a52session_gamepad_assign(session, i, sel <= 0 ? -1 : sel - 1);
+                showEff();
+            });
+            showEff();
+            line->addWidget(label, 1);
+            line->addWidget(eff);
+            line->addWidget(box);
+            padRows->addWidget(row);
+        }
+    };
+    rebuild();
+    auto *timer = new QTimer(dlg);
+    QObject::connect(timer, &QTimer::timeout, dlg, rebuild);
+    timer->start(250);
+
+    auto *controls = new QGroupBox(QStringLiteral("Controls"));
+    auto *controlsBox = new QVBoxLayout(controls);
+    auto *note = new QLabel(QStringLiteral("Keys and gamepad buttons are re-mapped in the Controllers window (Map)."));
+    note->setWordWrap(true);
+    note->setStyleSheet(QStringLiteral("color: gray;"));
+    controlsBox->addWidget(note);
+    auto *buttons = new QHBoxLayout;
+    auto *reset = new QPushButton(QStringLiteral("Reset Controls"));
+    reset->setToolTip(QStringLiteral("Put every key and gamepad button back to its default"));
+    auto *open = new QPushButton(QStringLiteral("Open Controllers"));
+    open->setToolTip(QStringLiteral("Close Preferences and open the Controllers window"));
+    auto *state = new QLabel;
+    state->setStyleSheet(QStringLiteral("color: gray;"));
+    QObject::connect(reset, &QPushButton::clicked, dlg, [session, state] {
+        a52session_bindings_reset(session);
+        state->setText(QStringLiteral("Every key and gamepad button is back to its default."));
+    });
+    QObject::connect(open, &QPushButton::clicked, dlg, [dlg, openControllers] {
+        if (openControllers)
+            *openControllers = true;
+        dlg->accept();
+    });
+    buttons->addWidget(reset);
+    buttons->addWidget(open);
+    buttons->addWidget(state, 1);
+    controlsBox->addLayout(buttons);
+    pageLayout->addWidget(controls);
+}
+
 } // namespace
 
-int SettingsDialog::run(QWidget *parent, a52session *session, const std::function<void()> &onLive)
+int SettingsDialog::run(QWidget *parent, a52session *session, const std::function<void()> &onLive,
+                        bool *openControllers)
 {
     QDialog dlg(parent);
     dlg.setWindowTitle(QStringLiteral("Preferences"));
@@ -322,6 +429,8 @@ int SettingsDialog::run(QWidget *parent, a52session *session, const std::functio
             if (pageLayout) {
                 if (lastPage == QLatin1String("BIOS"))
                     biosSlots(st, pageLayout);
+                if (lastPage == QLatin1String("Input"))
+                    inputExtras(st, pageLayout, openControllers);
                 pageLayout->addStretch(1);
             }
             page = new QWidget;
@@ -355,6 +464,8 @@ int SettingsDialog::run(QWidget *parent, a52session *session, const std::functio
     if (pageLayout) {
         if (lastPage == QLatin1String("BIOS"))
             biosSlots(st, pageLayout);
+        if (lastPage == QLatin1String("Input"))
+            inputExtras(st, pageLayout, openControllers);
         pageLayout->addStretch(1);
     }
 
