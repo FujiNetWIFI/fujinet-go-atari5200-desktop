@@ -18,9 +18,9 @@ find_package(Git QUIET)
 set(ATARI800_COMMIT "b49865e63f5675c798d0122a5ff65c89b2f2748b")
 set(ATARI800_URL "https://github.com/atari800/atari800")
 
-# fork commit of fujinet-firmware PR #2452 (5200 CONFIG re-baked, apps.irata.online lobby); move back to master once it merges.
-set(FUJINET_COMMIT "5acdc421dbb30fc5d86dc53290b49f35ab8d32c1")
-set(FUJINET_URL "https://github.com/tschak909/fujinet-firmware")
+# master with the 5200 CONFIG re-baked for the apps.irata.online lobby (PR #2452, 2026-11-20).
+set(FUJINET_COMMIT "fc4a8fa6cf5aad1cfcb7cfc050a9fc8cacf3f3b0")
+set(FUJINET_URL "https://github.com/FujiNetWIFI/fujinet-firmware")
 
 # a52_provide_dependency(NAME <n> PATH <p> SENTINEL <file> OVERRIDE <VAR>
 #                         RESULT <out> [URL <u> COMMIT <c>]

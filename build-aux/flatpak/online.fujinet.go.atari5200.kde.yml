@@ -139,8 +139,8 @@ modules:
       # an archive, so tools/fujinet/update-fujinet-firmware.sh can move the
       # pin by rewriting "commit:" (the FujiNet version then reads a real hash).
       - type: git
-        url: https://github.com/tschak909/fujinet-firmware
-        commit: 5acdc421dbb30fc5d86dc53290b49f35ab8d32c1
+        url: https://github.com/FujiNetWIFI/fujinet-firmware
+        commit: fc4a8fa6cf5aad1cfcb7cfc050a9fc8cacf3f3b0
         dest: third_party/fujinet-firmware
       # Same reasoning: the sandboxed build step has no network access, but
       # tools/fujinet/build-fujinet-desktop.sh needs mbedTLS 3.x and
