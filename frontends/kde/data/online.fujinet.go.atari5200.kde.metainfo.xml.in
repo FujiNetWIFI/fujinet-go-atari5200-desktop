@@ -78,6 +78,13 @@
     <release version="@PROJECT_VERSION@" date="2026-11-20">
       <description>
         <p>
+          Build fix: the Flatpak builds fetched a firmware commit that was no longer on any branch; the embedded FujiNet is now pinned to the merged commit on fujinet-firmware master. No change in behaviour.
+        </p>
+      </description>
+    </release>
+    <release version="0.4.1" date="2026-11-20">
+      <description>
+        <p>
           The built-in CONFIG's Game Lobby row now opens the lobby on apps.irata.online.
         </p>
       </description>
