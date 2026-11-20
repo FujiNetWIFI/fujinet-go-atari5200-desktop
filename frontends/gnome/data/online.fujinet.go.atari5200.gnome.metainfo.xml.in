@@ -75,7 +75,14 @@
          it cannot disagree with the tree; past releases are literal and go
          above it as they are made. The release job checks that this first
          entry is still a template. -->
-    <release version="@PROJECT_VERSION@" date="2026-11-18">
+    <release version="@PROJECT_VERSION@" date="2026-11-20">
+      <description>
+        <p>
+          The built-in CONFIG's Game Lobby row now opens the lobby on apps.irata.online.
+        </p>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-11-18">
       <description>
         <p>
           New Controllers window (F9), drawn like the real CX52: four controllers (two with the 2-port BIOS), analog stick you can drag, side fire buttons, keypad and START / PAUSE / RESET you can press, and the keypad shared by all controllers shown as such.
